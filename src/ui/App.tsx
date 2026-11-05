@@ -31,7 +31,12 @@ import { MenuBar } from './MenuBar';
 import { ProjectPanel } from './ProjectPanel';
 import { StatusBar } from './StatusBar';
 import { ToolPalette } from './ToolPalette';
-import { AUTOSAVE_KEY, DEFAULT_ROOM_HEIGHT, isTextInput } from './editor';
+import {
+  AUTOSAVE_KEY,
+  DEFAULT_ROOM_HEIGHT,
+  isTextInput,
+  UPCOMING_TOOLS,
+} from './editor';
 import type { Cursor, Selection, Tool } from './editor';
 
 function _initialProject(): { project: Project; message: string } {
@@ -338,6 +343,20 @@ export function App() {
       if (modifier && key === 's') {
         event.preventDefault();
         saveFile();
+        return;
+      }
+      const upcoming = UPCOMING_TOOLS[key.toUpperCase()];
+      if (
+        upcoming &&
+        !modifier &&
+        !event.altKey &&
+        (!isTextInput(event.target) ||
+          (event.target === commandRef.current && !commandRef.current?.value))
+      ) {
+        event.preventDefault();
+        setMessage(
+          `${upcoming} is not available yet. Use R for rectangles, P for polygons, or M for measurements.`,
+        );
         return;
       }
       if (event.target === commandRef.current) {

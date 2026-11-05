@@ -74,7 +74,7 @@ press S to resume. Opening/height/join workflow steps remain in M4.
 
 ## M4: openings, heights, joins
 
-- Door, window and arch tools on edges; their measurements are added to the queue.
+- Door (`D`), window (`W`) and arch tools on edges; their measurements are added to the queue.
 - Room heights. Wall thickness at doorways. Joins between rooms, fitted together.
 
 ## M5: export
@@ -85,7 +85,7 @@ press S to resume. Opening/height/join workflow steps remain in M4.
 ## M6: more blocks
 
 - Add a block (floor / site / other), switch blocks, links between blocks, placing a block from its links.
-- Garden features: circle, polyline, rectangle with labels.
+- Feature drawing tools: circle (`C`), line/polyline (`L`), rectangle with labels, including garden features.
 
 ## M7: smart survey and devices
 

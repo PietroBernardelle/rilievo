@@ -1,4 +1,5 @@
 import type { Tool } from './editor';
+import { UPCOMING_TOOLS } from './editor';
 const TOOLS = [
   { label: 'Select', shortcut: 'V', path: 'M6 3v16l4-5 5 7 3-2-5-7h6Z' },
   { label: 'Rectangle', shortcut: 'R', path: 'M4 5h16v14H4Z' },
@@ -41,16 +42,19 @@ export function ToolPalette({
           key={label}
           className="tool-button bevel"
           type="button"
-          disabled={!['V', 'R', 'P', 'M', 'Space'].includes(shortcut)}
+          disabled={!!UPCOMING_TOOLS[shortcut]}
           aria-pressed={tool === shortcut}
           onClick={() => onTool(shortcut as Tool)}
-          aria-label={`${label} (${shortcut})`}
-          title={`${label} (${shortcut})${['V', 'R', 'P', 'M', 'Space'].includes(shortcut) ? '' : ' — coming in a later milestone'}`}
+          aria-label={`${label} (${shortcut})${UPCOMING_TOOLS[shortcut] ? ' — not available yet' : ''}`}
+          title={`${label} (${shortcut})${UPCOMING_TOOLS[shortcut] ? ' — not available yet' : ''}`}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path d={path} />
           </svg>
           <span className="tool-shortcut">{shortcut}</span>
+          {UPCOMING_TOOLS[shortcut] && (
+            <span className="tool-unavailable">Later</span>
+          )}
         </button>
       ))}
     </aside>

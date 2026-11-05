@@ -144,6 +144,11 @@ input:focus-visible {
   line-height: 1;
 }
 
+.tool-unavailable {
+  font-size: 9px;
+  line-height: 1;
+}
+
 .drawing-area {
   min-width: 0;
   min-height: 0;

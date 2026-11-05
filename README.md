@@ -55,6 +55,8 @@ The scoped `minimatch` override patches the lint parser's transitive dependency
 Live dimensions stay readable in screen pixels while zooming. At distant zoom
 levels, grid dots are thinned for legibility; snapping always uses 0.100 m.
 Moving a corner by hand updates both its current and sketch coordinates.
+Circle (`C`), Line (`L`), Door (`D`), and Window (`W`) are marked **Later** in the
+palette. Door/window tools are planned for M4; circle/line features for M6.
 Deleting geometry removes dependent wall/opening/join metadata and rejects affected
 measurements while preserving their historical endpoints. Unaffected edge references
 are reindexed. Invalid files and invalid polygon edits leave the project intact.
