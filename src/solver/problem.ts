@@ -6,11 +6,14 @@ import {
 } from '../model/geometry';
 import type { Block, Constraint, Point } from '../model/types';
 import { sketchConstraints } from './constraints';
+import { CONTACT_SIGMA, measuredRoomIds, sketchContacts } from './contacts';
 import { edgeEndpoints, pairedOpening, resolvePoint } from './geometry';
 import type { LeastSquaresProblem } from './lm';
 
 export const ANGLE_SIGMA = (2 * Math.PI) / 180;
 export const SKETCH_SIGMA = 1;
+export const UNMEASURED_EDGE_SIGMA = 0.1;
+export const UNMEASURED_ANCHOR_SIGMA = 10;
 export const JOIN_SIGMA = Math.hypot(0.002, 0.005);
 export interface FitProblem extends LeastSquaresProblem {
   initial: number[];
@@ -59,6 +62,20 @@ export function createFitProblem(block: Block): FitProblem {
   initialBlock.vertices.find((vertex) => vertex.id === firstVertex.id)!.y = 0;
   initialBlock.vertices.find((vertex) => vertex.id === secondVertex.id)!.y = 0;
   const priors = block.vertices.map((vertex) => sketchFrame(vertex.sketch));
+  const measured = measuredRoomIds(block);
+  const unmeasuredRooms = block.rooms.filter((room) => !measured.has(room.id));
+  const unmeasuredVertices = new Set(
+    unmeasuredRooms.flatMap((room) => room.vertexIds),
+  );
+  const shapeEdges = unmeasuredRooms.flatMap((room) => {
+    const points = roomPoints(block, room);
+    return room.vertexIds.map((id, i) => ({
+      a: { vertex: id },
+      b: { vertex: room.vertexIds[(i + 1) % points.length]! },
+      length: distance(points[i]!, points[(i + 1) % points.length]!),
+    }));
+  });
+  const contacts = sketchContacts(block);
   const slots: { index: number; axis: 'x' | 'y' }[] = [];
   const initial: number[] = [];
   initialBlock.vertices.forEach((vertex, index) => {
@@ -119,11 +136,28 @@ export function createFitProblem(block: Block): FitProblem {
       );
     }
     current.vertices.forEach((vertex, i) => {
+      const sigma = unmeasuredVertices.has(vertex.id)
+        ? UNMEASURED_ANCHOR_SIGMA
+        : SKETCH_SIGMA;
       residuals.push(
-        (vertex.x - priors[i]!.x) / SKETCH_SIGMA,
-        (vertex.y - priors[i]!.y) / SKETCH_SIGMA,
+        (vertex.x - priors[i]!.x) / sigma,
+        (vertex.y - priors[i]!.y) / sigma,
       );
     });
+    for (const edge of shapeEdges)
+      residuals.push(
+        (distance(
+          resolvePoint(current, edge.a),
+          resolvePoint(current, edge.b),
+        ) -
+          edge.length) /
+          UNMEASURED_EDGE_SIGMA,
+      );
+    for (const contact of contacts) {
+      const a = resolvePoint(current, contact.a);
+      const b = resolvePoint(current, contact.b);
+      residuals.push((a.x - b.x) / CONTACT_SIGMA, (a.y - b.y) / CONTACT_SIGMA);
+    }
     current.openings.forEach((opening, i) =>
       residuals.push(
         (opening.offset - block.openings[i]!.offset) / SKETCH_SIGMA,

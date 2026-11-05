@@ -14,7 +14,10 @@ Minimise Σ rᵢ², where each residual is divided by its standard deviation:
 | Height / sill / width | (fitted − value) / σ | as above (may be stored outside the 2D fit) |
 | Right angle (from sketch) | angle error / σθ | soft, σθ ≈ 2° (old houses are not square) |
 | Collinear / parallel | geometry error / σ | soft or hard (from joins) |
-| Sketch prior | (p − p_sketch) / σs | very weak, σs ≈ 1 m. Only keeps unmeasured parts in place |
+| Sketch position, measured room | (p − p_sketch) / σs | very weak, σs = 1 m |
+| Unmeasured room shape | (edge length − sketch edge length) / σe | σe = 0.10 m, plus the existing angle prior |
+| Unmeasured room position | (p − p_sketch) / σs | very weak anchor, σs = 10 m |
+| Active sketch contact | (pa − pb) / σc, one residual per coordinate | σc = 0.005 m |
 | Join (shared wall) | offset between facing edges minus thickness | σ ≈ 5 mm |
 
 Solve with **Levenberg–Marquardt** (Gauss–Newton with damping). Use a numeric Jacobian (central differences) in v1; switch to an analytic one if it's slow. Problems are small (one floor is about 50–150 unknowns), so dense matrices are fine. Write it ourselves (about 150 lines) instead of pulling in a heavy library.
@@ -22,7 +25,7 @@ Solve with **Levenberg–Marquardt** (Gauss–Newton with damping). Use a numeri
 ## Diagnostics
 - **Residual per measurement** after the fit. Flag if |fitted − measured| > tolerance (default 15 mm) or > 3σ.
 - **Consistency per room and connected group:** sum the squared normalised measurement residuals and test against a chi-square distribution with ν = number of measurements − rank of the measurement Jacobian. Report `consistent: false` when p < 0.01. This detects distributed errors even when every individual residual is below 15 mm.
-- **Redundancy per measurement:** use the weighted measurement Jacobian J (each row divided by that measurement's σ), excluding sketch, angle and join rows. Compute the diagonal of I − H, where H = J(JᵀJ)⁺Jᵀ. A pivoted, reorthogonalised QR computes the same projection without inverting the singular normal matrix; the pseudoinverse accounts for free translations, rotations and unobserved variables.
+- **Redundancy per measurement:** use the weighted measurement Jacobian J (each row divided by that measurement's σ), excluding sketch, shape, angle, contact and join rows. Compute the diagonal of I − H, where H = J(JᵀJ)⁺Jᵀ. A pivoted, reorthogonalised QR computes the same projection without inverting the singular normal matrix; the pseudoinverse accounts for free translations, rotations and unobserved variables.
 - **Unchecked measurements:** redundancy below 1e-6 is reported as zero with `unchecked: true` and `standardizedResidual: null`. Errors in those measurements cannot be detected from the available distances. With ν = 0, `consistent: true` means no inconsistency was detected; `pValue: null` explicitly means there is no statistical check.
 - **Suspects:** in an inconsistent room or group, rank checked measurements by descending |wᵢ|, where wᵢ = (fitted − measured) / (σᵢ √redundancyᵢ). Return this ordered list for re-measurement. A high rank alone does not identify the wrong measurement.
 - **Probable wrong measurement:** run leave-one-out for inconsistent groups with more than one redundancy. Name a single measurement only when every trial converges and exactly one omission makes all remaining room/group tests consistent, with positive redundancy remaining. Otherwise keep the probable ID null. One redundant distance detects a closure error but cannot localise it by leave-one-out.
@@ -30,7 +33,7 @@ Solve with **Levenberg–Marquardt** (Gauss–Newton with damping). Use a numeri
 - **Overall check:** RMS of the normalised residuals, shown in the status bar.
 
 These are linearised tests using the recorded measurement sigmas as known noise
-estimates. Priors and joins influence the fitted geometry but do not supply extra
+estimates. Priors, sketch contacts and joins influence the fitted geometry but do not supply extra
 measurement evidence in these tests. Room tests use distances with both endpoints
 in that room; group tests also include recorded cross-room distances. Each scope
 computes its own Jacobian, rank and redundancy. Chi-square tail probabilities use
@@ -45,6 +48,45 @@ against [NIST critical values](https://www.itl.nist.gov/div898/handbook/eda/sect
 Each room is fitted on its inside faces. Two rooms sharing a wall are tied by a join:
 - the facing edges are parallel, at distance = thickness (measured in the doorway);
 - a shared doorway aligns them along the wall: the jamb in room A and the jamb in room B are the same physical edge, offset only by the thickness.
+
+## M3.1: attached rooms follow fitted neighbours
+
+`sketchContacts(block)` infers temporary attachments from `vertex.sketch`:
+
+- Two corners in different rooms within **0.001 m** form a corner–corner contact.
+  Each pair is included once; its two incident edges do not add duplicate contacts.
+- A remaining corner within **0.001 m** of another room's nearest edge forms a
+  corner–edge contact. Its projected fractional position `t` is taken from the
+  sketch and stays fixed while the edge is fitted. The corner follows that point
+  in both x and y; it does not slide along the edge.
+- A contact is active only while at least one of its rooms has **no `done`
+  measurements**. For this rule, a room owns a measurement when either endpoint
+  belongs to it. Queued, skipped and rejected records do not count. Once both
+  rooms have done readings, their sketch contact is ignored.
+
+Each active contact contributes two soft residuals with **sigma 0.005 m**. It is
+recomputed when a fit starts, using the unchanged sketch rather than the latest
+fitted gap. Contacts are not written into measurements, constraints or project
+JSON. On the plan, small cyan dots identify the active attached corners and follow
+their fitted positions; dots disappear when the contact no longer applies.
+
+An unmeasured room keeps its sketched edge lengths with **sigma 0.10 m**, retains
+the existing angle priors, and has only a **10 m** absolute position prior. Thus
+an attached room normally translates with its neighbour rather than compressing
+to keep its far wall at the original coordinates. These are soft shape priors:
+the room can stretch when contacts on opposite sides require it.
+
+Measured rooms retain the existing 1 m position prior and may translate or rotate
+within the connected problem. Only the first room's origin/orientation is fixed.
+Consequently, a free measured neighbour may shift instead of forcing an unmeasured
+middle room to stretch. When measured cross-room distances constrain the space,
+the middle room stretches to keep contact with both neighbours. This preserves
+the requested freedom of measured neighbours without adding artificial anchors.
+
+Active contacts join solver components just like explicit joins and cross-room
+measurements. Disconnected rooms retain the existing separate-fit placement.
+Shape priors and contacts do not count as measurement evidence for rigidity,
+redundancy, consistency or unchecked status. The JSON schema remains version 1.
 
 ## Tests
 See `examples/solver-cases.md`. Every case is a unit test that must pass before survey mode is wired to the UI.
@@ -82,7 +124,7 @@ block together only when the fit converges.
   along +x. Sketch priors are transformed into that same reference frame, while
   the stored `sketch` positions remain unchanged. LM retains full precision;
   the model's JSON writer rounds stored coordinates to 0.0001 m.
-- Independent rooms are fitted as separate problems. Joins, explicit cross-room
+- Independent rooms are fitted as separate problems. Active sketch contacts, joins, explicit cross-room
   constraints and active cross-room measurements connect rooms into a single
   problem. Each component fixes its own gauge while solving, then returns to its
   original placement in the block's reference frame. Measurements and their history
@@ -97,7 +139,7 @@ block together only when the fit converges.
   and thickness records use their two point references. Height records remain
   outside the 2D fit and are returned in `deferredMeasurementIds`. No measurement
   status or value is changed by fitting.
-- Rigidity uses the rank of the measured-distance Jacobian, excluding priors and
+- Rigidity uses the rank of the measured-distance Jacobian, excluding priors, contacts and
   joins. Unknown opening offsets are eliminated from that rank count so that
   jamb measurements do not falsely imply independent corner constraints.
 - `leaveOneOut` returns one refit summary per omitted measurement, ordered by
@@ -129,6 +171,10 @@ M2.1 tests in `consistency.test.ts` cover the 40 mm wall error with two diagonal
 unchecked measurements with one diagonal, correct measurements, ambiguous and
 unique leave-one-out explanations, joined groups, unequal sigmas, component
 placement, and an eight-room fit with one bad wall in under 500 ms.
+M3.1 tests in `contacts.test.ts` cover the 1 mm threshold, corner/edge matching,
+fixed edge fractions, 50 mm neighbour movement without width loss, stretching and
+free measured-neighbour movement, contact release, disconnected rooms, propagation
+through a chain, fixed origin/orientation, repeat fits and schema-1 round trips.
 
 ```sh
 npm test -- src/solver

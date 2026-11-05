@@ -1,5 +1,6 @@
 import type { Block } from '../model/types';
 import { pointRoom } from './geometry';
+import { sketchContacts } from './contacts';
 
 export function connectedRoomGroups(block: Block): string[][] {
   if (
@@ -22,6 +23,7 @@ export function connectedRoomGroups(block: Block): string[][] {
     }
   }
   for (const join of block.joins) connect(join.a[0], join.b[0]);
+  for (const contact of sketchContacts(block)) connect(...contact.roomIds);
   for (const constraint of block.constraints)
     for (const edge of constraint.edges.slice(1))
       connect(constraint.edges[0]![0], edge[0]);

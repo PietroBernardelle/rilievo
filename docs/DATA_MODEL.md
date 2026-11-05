@@ -69,7 +69,9 @@ A measurement end (`a` or `b`) can be:
 
 ## Rules
 - `sketch` keeps the original drawn position. The fit writes `x`/`y`, so the sketch can always be restored.
-- Rooms never share vertices. Rooms are tied together through `joins`. This keeps each room's fit independent and the joins explicit.
+- Rooms never share vertices. Explicit `joins` tie measured rooms together. M3.1
+  also infers temporary contacts from the sketch while either room is unmeasured;
+  those contacts are solver output only and add no JSON fields.
 - Never delete measurements. Mark wrong ones `rejected`, so the history is kept.
 - M3 re-measurement creates a new `done` record and marks the old reading
   `rejected`. Skipped requests stay `skipped` until revisited. Queue order follows

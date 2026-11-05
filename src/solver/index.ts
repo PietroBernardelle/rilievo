@@ -9,3 +9,5 @@ export type {
   ConsistencyTest,
 } from './diagnostics';
 export { resolvePoint } from './geometry';
+export { sketchContacts } from './contacts';
+export type { SketchContact } from './contacts';
