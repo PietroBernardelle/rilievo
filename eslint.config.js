@@ -21,7 +21,7 @@ export default tseslint.config(
     extends: [reactHooks.configs.flat.recommended, reactRefresh.configs.vite],
   },
   {
-    files: ['src/{model,solver}/**/*.ts'],
+    files: ['src/{model,solver,survey}/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
