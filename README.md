@@ -2,8 +2,9 @@
 
 Sketch a building roughly, then let the app walk you through the laser measurements and fit the sketch to them. Built for surveying a house room by room (later: other floors, the garden) and exporting clean plans.
 
-Status: **M2 complete** — the sketch UI includes M1.1 geometry and label fixes,
-and a tested pure solver is available in `src/solver`. Survey UI integration,
+Status: **M2.1 complete** — the sketch UI includes M1.1 geometry and label fixes,
+and a tested pure solver is available in `src/solver`, including consistency tests,
+measurement redundancy and separate fits for independent rooms. Survey UI integration,
 opening tools, and exports come in later milestones.
 
 ## Development
@@ -62,7 +63,7 @@ are reindexed. Invalid files and invalid polygon edits leave the project intact.
 ## Source layout
 
 - `src/model`: pure project types, editing, geometry, JSON validation, and undo history.
-- `src/solver`: pure LM fitting, rigidity, residuals, and leave-one-out diagnostics.
+- `src/solver`: pure LM fitting, rigidity, consistency, residuals, and leave-one-out diagnostics.
 - `src/ui`: React components and the CAD theme.
 - `src/tools`: pure snapping and viewport helpers.
 - `src/export`: export formats (M5).

@@ -45,6 +45,17 @@ explicit hard constraints, doorway alignment, and optional leave-one-out diagnos
 It is not wired into the UI. The schema-1 doorway pairing rule and API are documented
 in `SOLVER.md`. Tests, build, and lint pass.
 
+## M2.1: consistency and independent fits
+
+- [x] Chi-square consistency tests per room and connected group at p < 0.01.
+- [x] Measurement redundancy, standardised residuals, ordered suspects and unchecked distances.
+- [x] Name a probable wrong measurement only when leave-one-out uniquely identifies it.
+- [x] Fit independent rooms separately, retaining their placement and the 15 mm flags.
+- [x] Regression cases, including an eight-room fit with one bad wall below 500 ms.
+
+Case 3 now distinguishes detecting an error from localising it. Diagnostics are
+transient output; the JSON schema and sketch UI are unchanged.
+
 ## M3: survey mode
 
 - Rule-based measurement queue per room.
