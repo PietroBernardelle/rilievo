@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+package-lock.json
+public/fonts/
+# Keep the existing design documents and sample fixtures as supplied.
+AGENTS.md
+docs/SPEC.md
+docs/DATA_MODEL.md
+docs/SOLVER.md
+docs/UI.md
+examples/
