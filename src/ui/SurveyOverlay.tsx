@@ -23,6 +23,8 @@ export function SurveyOverlay({
   const screen = (ref: PointRef) => toScreen(resolvePoint(block, ref), view);
   const a = current && screen(current.a);
   const b = current && screen(current.b);
+  const vertical =
+    current?.kind === 'height' || current?.target?.type === 'wall-thickness';
   return (
     <g className="survey-overlay" pointerEvents="none">
       <defs>
@@ -88,12 +90,26 @@ export function SurveyOverlay({
             className="survey-arrow"
             x1={a.x}
             y1={a.y}
-            x2={b.x}
-            y2={b.y}
+            x2={vertical ? a.x : b.x}
+            y2={vertical ? a.y - 48 : b.y}
+            markerStart={vertical ? 'url(#survey-arrowhead)' : undefined}
             markerEnd="url(#survey-arrowhead)"
           />
           <circle cx={a.x} cy={a.y} r="6" />
-          <circle cx={b.x} cy={b.y} r="6" />
+          {!vertical && <circle cx={b.x} cy={b.y} r="6" />}
+          {vertical && (
+            <text
+              className="vertical-measurement-label"
+              x={a.x + 12}
+              y={a.y - 24}
+            >
+              {current.target?.type === 'sill'
+                ? 'Sill height'
+                : current.target?.type === 'wall-thickness'
+                  ? 'Wall thickness'
+                  : 'Height'}
+            </text>
+          )}
         </g>
       )}
       {picked && (

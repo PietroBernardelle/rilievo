@@ -21,6 +21,13 @@ describe('survey feedback', () => {
     const diagnostics = consistencyDiagnostics(result.block, 0.015);
     const markup = renderToStaticMarkup(
       <ProjectPanel
+        selectedOpening={undefined}
+        onOpeningSelect={() => {}}
+        onOpeningUpdate={() => true}
+        onOpeningLink={() => {}}
+        onOpeningUnlink={() => {}}
+        onOpeningDelete={() => {}}
+        onWallUpdate={() => true}
         project={{ ...createProject('2026-11-05'), blocks: [result.block] }}
         activeBlock={result.block}
         selectedRoom={result.block.rooms[0]}
@@ -69,6 +76,13 @@ describe('survey feedback', () => {
     const diagnostics = consistencyDiagnostics(block, 0.015);
     const markup = renderToStaticMarkup(
       <ProjectPanel
+        selectedOpening={undefined}
+        onOpeningSelect={() => {}}
+        onOpeningUpdate={() => true}
+        onOpeningLink={() => {}}
+        onOpeningUnlink={() => {}}
+        onOpeningDelete={() => {}}
+        onWallUpdate={() => true}
         project={{ ...createProject('2026-11-05'), blocks: [block] }}
         activeBlock={block}
         selectedRoom={block.rooms[0]}

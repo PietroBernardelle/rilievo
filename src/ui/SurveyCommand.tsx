@@ -111,7 +111,9 @@ export function SurveyCommand({
         <button
           className="bevel"
           type="button"
-          disabled={!current || picking}
+          disabled={
+            !current || picking || current.kind === 'height' || !!current.target
+          }
           onClick={onBlocked}
         >
           Blocked

@@ -10,6 +10,15 @@ import {
   updateRoom,
 } from '../model/project';
 import type { Point, PointRef, Project } from '../model/types';
+import {
+  deleteOpening,
+  linkOpenings,
+  unlinkOpening,
+  updateOpening,
+  updateWall,
+} from '../model/openings';
+import { placeOpening } from '../tools/openings';
+import { ensureSurveyQueue, firstPending } from '../survey/queue';
 import { moveMeasurement, updatePlacementSigma } from '../model/measurements';
 import { consistencyDiagnostics } from '../solver/diagnostics';
 import {
@@ -62,6 +71,9 @@ const PROMPTS: Record<Tool, string> = {
   V: 'Select a room or corner. Drag a corner to move. Delete removes the selection.',
   R: 'RECTANGLE: click two opposite corners. Shift disables snap. Esc cancels.',
   P: 'POLYGON: click corners; Enter or click the first corner to close. Esc cancels.',
+  D: 'DOOR: click an edge to place. A shared wall creates a paired doorway.',
+  W: 'WINDOW: click an edge to place. Select to edit or drag its ends.',
+  A: 'ARCH: click an edge to place. A shared wall creates a paired opening.',
   M: 'MEASURE: click two corners, jambs or points on edges.',
   Space: 'PAN: drag the drawing. Wheel zooms around the cursor. F fits all.',
 };
@@ -102,12 +114,13 @@ export function App() {
     activeBlock?.measurements.find(
       (item) => item.id === state.survey?.lastId && item.status === 'done',
     ) ??
-    activeBlock?.measurements
-      .filter((item) => item.status === 'done' && item.kind !== 'height')
-      .at(-1);
+    activeBlock?.measurements.filter((item) => item.status === 'done').at(-1);
   const [selection, setSelection] = useState<Selection | null>(null);
   const selectedRoom = activeBlock?.rooms.find(
     (room) => room.id === selection?.roomId,
+  );
+  const selectedOpening = activeBlock?.openings.find(
+    (item) => item.id === selection?.openingId,
   );
   const [tool, setTool] = useState<Tool>('V');
   const [cursor, setCursor] = useState<Cursor | null>(null);
@@ -145,7 +158,19 @@ export function App() {
   }
   function apply(next: Project): void {
     if (next === historyRef.current.present.project) return;
-    applyState({ ...historyRef.current.present, project: next });
+    const current = historyRef.current.present;
+    let survey = current.survey;
+    if (survey) {
+      next = ensureSurveyQueue(next, survey.blockId);
+      const block = next.blocks.find((item) => item.id === survey!.blockId)!;
+      if (
+        !block.measurements.some(
+          (item) => item.id === survey!.currentId && item.status !== 'rejected',
+        )
+      )
+        survey = { ...survey, currentId: firstPending(block) };
+    }
+    applyState({ ...current, project: next, survey });
   }
   function attempt(action: () => void): boolean {
     try {
@@ -193,17 +218,23 @@ export function App() {
     if (!selection || !activeBlock) return;
     attempt(() => {
       apply(
-        selection.vertexId
-          ? deleteCorner(
+        selection.openingId
+          ? deleteOpening(
               historyRef.current.present.project,
               activeBlock.id,
-              selection.vertexId,
+              selection.openingId,
             )
-          : deleteRoom(
-              historyRef.current.present.project,
-              activeBlock.id,
-              selection.roomId,
-            ),
+          : selection.vertexId
+            ? deleteCorner(
+                historyRef.current.present.project,
+                activeBlock.id,
+                selection.vertexId,
+              )
+            : deleteRoom(
+                historyRef.current.present.project,
+                activeBlock.id,
+                selection.roomId,
+              ),
       );
       setSelection(null);
       setResetToken((value) => value + 1);
@@ -406,7 +437,7 @@ export function App() {
         beginCustom();
         return;
       }
-      if (key === 'v' || key === 'r' || key === 'p') {
+      if (['v', 'r', 'p', 'd', 'w', 'a'].includes(key)) {
         event.preventDefault();
         changeTool(key.toUpperCase() as Tool);
       }
@@ -493,6 +524,34 @@ export function App() {
               setMessage('');
             }}
             onCreate={draw}
+            onPlaceOpening={(edge, type, offset) => {
+              if (!activeBlock) return;
+              attempt(() => {
+                const result = placeOpening(
+                  historyRef.current.present.project,
+                  activeBlock.id,
+                  edge,
+                  type,
+                  offset,
+                );
+                apply(result.project);
+                setSelection({ roomId: edge[0], openingId: result.openingId });
+                setTool('V');
+              });
+            }}
+            onEditOpening={(id, changes) => {
+              if (activeBlock)
+                attempt(() =>
+                  apply(
+                    updateOpening(
+                      historyRef.current.present.project,
+                      activeBlock.id,
+                      id,
+                      changes,
+                    ),
+                  ),
+                );
+            }}
             onMove={(id, point) => {
               if (activeBlock)
                 attempt(() =>
@@ -517,6 +576,67 @@ export function App() {
           project={project}
           activeBlock={activeBlock}
           selectedRoom={selectedRoom}
+          selectedOpening={selectedOpening}
+          onOpeningSelect={(id) => {
+            const opening = activeBlock?.openings.find(
+              (item) => item.id === id,
+            );
+            if (opening)
+              setSelection({ roomId: opening.roomId, openingId: id });
+          }}
+          onOpeningUpdate={(changes) =>
+            !!activeBlock &&
+            !!selectedOpening &&
+            attempt(() =>
+              apply(
+                updateOpening(
+                  historyRef.current.present.project,
+                  activeBlock.id,
+                  selectedOpening.id,
+                  changes,
+                ),
+              ),
+            )
+          }
+          onOpeningLink={(otherId) => {
+            if (activeBlock && selectedOpening)
+              attempt(() =>
+                apply(
+                  linkOpenings(
+                    historyRef.current.present.project,
+                    activeBlock.id,
+                    selectedOpening.id,
+                    otherId,
+                  ),
+                ),
+              );
+          }}
+          onOpeningUnlink={() => {
+            if (activeBlock && selectedOpening)
+              attempt(() =>
+                apply(
+                  unlinkOpening(
+                    historyRef.current.present.project,
+                    activeBlock.id,
+                    selectedOpening.id,
+                  ),
+                ),
+              );
+          }}
+          onOpeningDelete={remove}
+          onWallUpdate={(edge, changes) =>
+            !!activeBlock &&
+            attempt(() =>
+              apply(
+                updateWall(
+                  historyRef.current.present.project,
+                  activeBlock.id,
+                  edge,
+                  changes,
+                ),
+              ),
+            )
+          }
           diagnostics={diagnostics?.rooms ?? []}
           settings={
             settingsOpen && (

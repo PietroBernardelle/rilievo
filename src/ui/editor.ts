@@ -1,8 +1,9 @@
 import type { Point } from '../model/types';
-export type Tool = 'V' | 'R' | 'P' | 'M' | 'Space';
+export type Tool = 'V' | 'R' | 'P' | 'D' | 'W' | 'A' | 'M' | 'Space';
 export interface Selection {
   roomId: string;
   vertexId?: string;
+  openingId?: string;
 }
 export interface Cursor {
   point: Point;
@@ -13,8 +14,6 @@ export const AUTOSAVE_KEY = 'rilievo.project.v1';
 export const UPCOMING_TOOLS: Record<string, string> = {
   C: 'Circle',
   L: 'Line',
-  D: 'Door',
-  W: 'Window',
 };
 export function isTextInput(target: EventTarget | null): boolean {
   return (

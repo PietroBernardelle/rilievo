@@ -1,19 +1,41 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { area, parseLength, perimeter, roomPoints } from '../model/geometry';
-import type { Block, Project, Room } from '../model/types';
+import type {
+  Block,
+  EdgeRef,
+  Opening,
+  Project,
+  Room,
+  Wall,
+} from '../model/types';
+import { roomHeightReadings } from '../model/heights';
+import { wallThickness } from '../model/openings';
+import type { OpeningChanges } from '../model/openings';
+import { cornerName, pointLabel } from '../survey/points';
+import { LengthField, OpeningProperties } from './OpeningProperties';
 import type { RoomDiagnostics } from '../solver/diagnostics';
 import { roomStatus } from '../survey/queue';
 interface Props {
   project: Project;
   activeBlock: Block | undefined;
   selectedRoom: Room | undefined;
+  selectedOpening: Opening | undefined;
   diagnostics: RoomDiagnostics[];
   settings: ReactNode;
   queue: ReactNode;
   onBlock: (id: string) => void;
   onSelect: (id: string) => void;
   onUpdate: (changes: { name?: string; height?: number }) => boolean;
+  onOpeningSelect: (id: string) => void;
+  onOpeningUpdate: (changes: OpeningChanges) => boolean;
+  onOpeningLink: (otherId: string) => void;
+  onOpeningUnlink: () => void;
+  onOpeningDelete: () => void;
+  onWallUpdate: (
+    edge: EdgeRef,
+    changes: Pick<Wall, 'thickness' | 'exterior'>,
+  ) => boolean;
 }
 function RoomProperties({
   room,
@@ -104,12 +126,19 @@ export function ProjectPanel({
   project,
   activeBlock,
   selectedRoom,
+  selectedOpening,
   diagnostics,
   settings,
   queue,
   onBlock,
   onSelect,
   onUpdate,
+  onOpeningSelect,
+  onOpeningUpdate,
+  onOpeningLink,
+  onOpeningUnlink,
+  onOpeningDelete,
+  onWallUpdate,
 }: Props) {
   return (
     <aside className="project-panel" aria-label="Project inspector">
@@ -173,7 +202,17 @@ export function ProjectPanel({
       </section>
       <section className="panel-section" aria-labelledby="properties-heading">
         <h2 id="properties-heading">Properties</h2>
-        {selectedRoom && activeBlock ? (
+        {selectedOpening && activeBlock ? (
+          <OpeningProperties
+            key={selectedOpening.id}
+            block={activeBlock}
+            opening={selectedOpening}
+            onUpdate={onOpeningUpdate}
+            onLink={onOpeningLink}
+            onUnlink={onOpeningUnlink}
+            onDelete={onOpeningDelete}
+          />
+        ) : selectedRoom && activeBlock ? (
           <RoomProperties
             key={`${activeBlock.id}:${selectedRoom.id}:${selectedRoom.name}:${selectedRoom.height}`}
             room={selectedRoom}
@@ -183,8 +222,99 @@ export function ProjectPanel({
         ) : (
           <p className="empty-message">Nothing selected</p>
         )}
+        {selectedRoom && activeBlock && (
+          <RoomDetails
+            block={activeBlock}
+            room={selectedRoom}
+            onOpening={onOpeningSelect}
+            onWall={onWallUpdate}
+          />
+        )}
       </section>
       {queue}
     </aside>
+  );
+}
+
+function RoomDetails({
+  block,
+  room,
+  onOpening,
+  onWall,
+}: {
+  block: Block;
+  room: Room;
+  onOpening: Props['onOpeningSelect'];
+  onWall: Props['onWallUpdate'];
+}) {
+  const heights = roomHeightReadings(block, room.id);
+  return (
+    <div className="room-details">
+      <h3>Room heights</h3>
+      {heights.readings.length ? (
+        heights.readings.map((item) => (
+          <p key={item.id}>
+            ↕ {pointLabel(block, item.a)}: {item.value!.toFixed(3)} m
+          </p>
+        ))
+      ) : (
+        <p className="property-note">{room.height.toFixed(3)} m · unmeasured</p>
+      )}
+      {heights.sloping && (
+        <p className="sloping-ceiling" role="status">
+          Sloping ceiling · heights differ by more than 0.020 m
+        </p>
+      )}
+      <details open={block.openings.some((item) => item.roomId === room.id)}>
+        <summary>Openings</summary>
+        <ul className="project-tree">
+          {block.openings
+            .filter((item) => item.roomId === room.id)
+            .map((item) => (
+              <li key={item.id}>
+                <button type="button" onClick={() => onOpening(item.id)}>
+                  {item.type} {item.id} · {item.width.toFixed(3)} m
+                </button>
+              </li>
+            ))}
+        </ul>
+      </details>
+      <details>
+        <summary>Wall thickness per edge</summary>
+        {room.vertexIds.map((id, i) => {
+          const wall = wallThickness(block, [room.id, i]);
+          return (
+            <div className="properties-form wall-properties" key={id}>
+              <LengthField
+                key={wall.value}
+                id={`wall-${room.id}-${i}`}
+                label={`${cornerName(i)}–${cornerName((i + 1) % room.vertexIds.length)} (m)`}
+                value={wall.value}
+                onSave={(value) => onWall([room.id, i], { thickness: value })}
+              />
+              <small>
+                {wall.measured ? 'measured' : 'unmeasured'} ·{' '}
+                {wall.exterior ? 'exterior' : 'interior'}
+              </small>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={wall.exterior}
+                  disabled={block.joins.some((join) =>
+                    [join.a, join.b].some(
+                      ([rid, edge]) => rid === room.id && edge === i,
+                    ),
+                  )}
+                  onChange={(event) =>
+                    onWall([room.id, i], { exterior: event.target.checked })
+                  }
+                />{' '}
+                Exterior
+              </label>
+            </div>
+          );
+        })}
+      </details>
+    </div>
   );
 }

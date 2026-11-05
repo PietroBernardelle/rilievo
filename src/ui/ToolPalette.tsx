@@ -12,6 +12,11 @@ const TOOLS = [
   { label: 'Line', shortcut: 'L', path: 'M4 20 20 4M3 18v3h3M18 3h3v3' },
   { label: 'Door', shortcut: 'D', path: 'M3 20h5V4h13M8 20a16 16 0 0 0 13-16' },
   {
+    label: 'Arch',
+    shortcut: 'A',
+    path: 'M4 20V11a8 8 0 0 1 16 0v9M2 20h4M18 20h4',
+  },
+  {
     label: 'Window',
     shortcut: 'W',
     path: 'M3 7h18v10H3ZM8 7v10M16 7v10M3 12h18',

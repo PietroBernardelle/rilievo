@@ -2,7 +2,18 @@ import { edgeLabels } from '../tools/labels';
 import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { containsPoint, distance, roomPoints } from '../model/geometry';
-import type { Block, Measurement, Point, PointRef } from '../model/types';
+import type {
+  Block,
+  EdgeRef,
+  Measurement,
+  Opening,
+  Point,
+  PointRef,
+} from '../model/types';
+import { edgeEndpoints } from '../model/points';
+import { openingDrag, pickEdge } from '../tools/openings';
+import { wallShapes } from '../tools/walls';
+import { PlanOpenings, PlanWalls } from './PlanWalls';
 import type { MeasurementResidual } from '../solver/diagnostics';
 import { pickSurveyPoint } from '../survey/points';
 import { resolvePoint } from '../solver/geometry';
@@ -38,13 +49,30 @@ interface Props {
   onSelect: (selection: Selection | null) => void;
   onCreate: (points: Point[]) => boolean;
   onMove: (vertexId: string, point: Point) => void;
+  onPlaceOpening: (
+    edge: EdgeRef,
+    type: Opening['type'],
+    offset: number,
+  ) => void;
+  onEditOpening: (
+    id: string,
+    changes: { offset: number; width: number },
+  ) => void;
   onCursor: (cursor: Cursor | null) => void;
   onMessage: (message: string) => void;
   onCancel: () => void;
 }
 type Gesture =
   | { type: 'pan'; start: Point; view: Viewport }
-  | { type: 'corner'; vertexId: string; point: Point; start: Point };
+  | { type: 'corner'; vertexId: string; point: Point; start: Point }
+  | {
+      type: 'opening';
+      opening: Opening;
+      mode: 'move' | 'start' | 'end';
+      start: Point;
+      raw: Point;
+      changes: { offset: number; width: number };
+    };
 function EdgeLabels({
   points,
   closed = true,
@@ -201,10 +229,29 @@ export function DrawingCanvas(props: Props) {
     if (previousFit.current === fitToken) return;
     previousFit.current = fitToken;
     const svg = svgRef.current;
-    if (svg)
-      setView(
-        fitView(block?.vertices ?? [], svg.clientWidth, svg.clientHeight),
-      );
+    if (svg) {
+      const bounds = block
+        ? [
+            ...block.vertices,
+            ...block.rooms.flatMap((room) => wallShapes(block, room).flat()),
+            ...block.openings
+              .filter(
+                (opening) => opening.type === 'door' && opening.swing === 'out',
+              )
+              .flatMap((opening) => {
+                const hinge = resolvePoint(block, {
+                  jamb: opening.id,
+                  side: opening.hinge ?? 0,
+                });
+                return [
+                  { x: hinge.x - opening.width, y: hinge.y - opening.width },
+                  { x: hinge.x + opening.width, y: hinge.y + opening.width },
+                ];
+              }),
+          ]
+        : [];
+      setView(fitView(bounds, svg.clientWidth, svg.clientHeight));
+    }
   }, [fitToken, block]);
   const complete = (): void => {
     if (draft.length < 3) {
@@ -359,6 +406,37 @@ export function DrawingCanvas(props: Props) {
       }
       return;
     }
+    if ((tool === 'D' || tool === 'W' || tool === 'A') && block) {
+      const edge = pickEdge(block, raw, 12 / view.scale, selection?.roomId);
+      if (edge)
+        props.onPlaceOpening(
+          edge.edge,
+          tool === 'D' ? 'door' : tool === 'W' ? 'window' : 'arch',
+          edge.offset,
+        );
+      else onMessage('Click a room edge to place the opening.');
+      return;
+    }
+    if (tool === 'V' && block && event.target instanceof Element) {
+      const id = event.target
+        .closest('[data-opening-id]')
+        ?.getAttribute('data-opening-id');
+      const opening = block.openings.find((item) => item.id === id);
+      if (opening) {
+        const end = event.target.getAttribute('data-opening-end');
+        onSelect({ roomId: opening.roomId, openingId: opening.id });
+        setGesture({
+          type: 'opening',
+          opening,
+          mode: end === 'start' || end === 'end' ? end : 'move',
+          start: screen,
+          raw,
+          changes: { offset: opening.offset, width: opening.width },
+        });
+        event.currentTarget.setPointerCapture(event.pointerId);
+        return;
+      }
+    }
     if (tool === 'R') {
       if (!draft[0]) setDraft([next.point]);
       else if (onCreate(rectanglePoints(draft[0], next.point))) {
@@ -400,7 +478,7 @@ export function DrawingCanvas(props: Props) {
     }
   }
   function move(event: ReactPointerEvent<SVGSVGElement>): void {
-    const { screen, next } = pointer(event);
+    const { screen, raw, next } = pointer(event);
     if (gesture?.type === 'pan') {
       setView({
         ...gesture.view,
@@ -413,6 +491,20 @@ export function DrawingCanvas(props: Props) {
     onCursor(next);
     if (gesture?.type === 'corner')
       setGesture({ ...gesture, point: next.point });
+    if (gesture?.type === 'opening' && block) {
+      const [a, b] = edgeEndpoints(block, [
+        gesture.opening.roomId,
+        gesture.opening.edge,
+      ]);
+      const delta =
+        ((raw.x - gesture.raw.x) * (b.x - a.x) +
+          (raw.y - gesture.raw.y) * (b.y - a.y)) /
+        distance(a, b);
+      setGesture({
+        ...gesture,
+        changes: openingDrag(block, gesture.opening, gesture.mode, delta),
+      });
+    }
   }
   function up(event: ReactPointerEvent<SVGSVGElement>): void {
     if (gesture?.type === 'corner') {
@@ -420,6 +512,11 @@ export function DrawingCanvas(props: Props) {
       if (distance(screen, gesture.start) > 2)
         onMove(gesture.vertexId, next.point);
     }
+    if (
+      gesture?.type === 'opening' &&
+      distance(pointer(event).screen, gesture.start) > 2
+    )
+      props.onEditOpening(gesture.opening.id, gesture.changes);
     setGesture(null);
     if (event.currentTarget.hasPointerCapture(event.pointerId))
       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -429,6 +526,27 @@ export function DrawingCanvas(props: Props) {
     tool === 'R' && draft[0] && cursor
       ? rectanglePoints(draft[0], cursor.point)
       : [...draft, ...(cursor && draft.length ? [cursor.point] : [])];
+  const previewBlock =
+    block &&
+    (gesture?.type === 'opening'
+      ? {
+          ...block,
+          openings: block.openings.map((item) =>
+            item.id === gesture.opening.id
+              ? { ...item, ...gesture.changes }
+              : item,
+          ),
+        }
+      : gesture?.type === 'corner'
+        ? {
+            ...block,
+            vertices: block.vertices.map((item) =>
+              item.id === gesture.vertexId
+                ? { ...item, ...gesture.point }
+                : item,
+            ),
+          }
+        : block);
   return (
     <svg
       ref={svgRef}
@@ -454,6 +572,9 @@ export function DrawingCanvas(props: Props) {
         R: rectangle. P: polygon. V: select. Space drag: pan. F: fit all.
       </desc>
       <Grid view={view} {...size} />
+      {previewBlock && (
+        <PlanWalls block={previewBlock} view={view} selection={selection} />
+      )}
       {block?.rooms.map((room) => {
         const points = roomPoints(block, room, false).map((point, i) =>
           gesture?.type === 'corner' && room.vertexIds[i] === gesture.vertexId
@@ -475,7 +596,10 @@ export function DrawingCanvas(props: Props) {
             className={`${selected ? 'room selected' : 'room'}${props.survey && props.surveyRoomId && props.surveyRoomId !== room.id ? ' dimmed' : ''}`}
             data-room-id={room.id}
           >
-            <polygon points={screens.map((p) => `${p.x},${p.y}`).join(' ')} />
+            <polygon
+              className="room-footprint"
+              points={screens.map((p) => `${p.x},${p.y}`).join(' ')}
+            />
             <text
               className="room-label"
               x={centre.x}
@@ -503,6 +627,13 @@ export function DrawingCanvas(props: Props) {
           </g>
         );
       })}
+      {previewBlock && (
+        <PlanOpenings
+          block={previewBlock}
+          view={view}
+          selectedId={selection?.openingId}
+        />
+      )}
       {block && gesture?.type !== 'corner' && (
         <ContactMarkers block={block} view={view} />
       )}

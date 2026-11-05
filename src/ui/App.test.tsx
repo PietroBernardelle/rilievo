@@ -27,7 +27,7 @@ describe('Sketch workspace', () => {
     expect(
       buttons.find((button) => button.includes('Measure (M)')),
     ).not.toContain('disabled=""');
-    expect(buttons.find((button) => button.includes('Door (D)'))).toContain(
+    expect(buttons.find((button) => button.includes('Door (D)'))).not.toContain(
       'disabled=""',
     );
   });
