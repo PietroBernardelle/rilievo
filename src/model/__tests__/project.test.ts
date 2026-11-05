@@ -106,7 +106,7 @@ describe('project editing', () => {
     const block = next.blocks[0]!;
     expect(block.rooms.map((room) => room.id)).toEqual(['r2']);
     expect(block.vertices).toHaveLength(4);
-    expect(block.openings.map((item) => item.id)).toEqual(['o2']);
+    expect(block.openings.map((item) => item.id)).toEqual(['o2', 'o3']);
     expect(block.joins).toEqual([]);
     expect(block.walls).toEqual([]);
     expect(block.constraints).toEqual([]);
