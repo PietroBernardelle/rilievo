@@ -2,9 +2,9 @@
 
 Sketch a building roughly, then let the app walk you through the laser measurements and fit the sketch to them. Built for surveying a house room by room (later: other floors, the garden) and exporting clean plans.
 
-Status: **M1 complete** — sketch rooms, edit corners and properties, undo changes,
-and save/open schema-version-1 projects. Fitting, survey tools, openings, and exports
-come in later milestones.
+Status: **M2 complete** — the sketch UI includes M1.1 geometry and label fixes,
+and a tested pure solver is available in `src/solver`. Survey UI integration,
+opening tools, and exports come in later milestones.
 
 ## Development
 
@@ -62,13 +62,15 @@ are reindexed. Invalid files and invalid polygon edits leave the project intact.
 ## Source layout
 
 - `src/model`: pure project types, editing, geometry, JSON validation, and undo history.
-- `src/solver`: pure fitting and diagnostics (M2).
+- `src/solver`: pure LM fitting, rigidity, residuals, and leave-one-out diagnostics.
 - `src/ui`: React components and the CAD theme.
 - `src/tools`: pure snapping and viewport helpers.
 - `src/export`: export formats (M5).
 
-The solver folder remains a placeholder for M2. Vitest runs in Node by default,
-and ESLint restricts UI imports and browser globals in the model and solver.
+Vitest runs in Node by default, and ESLint restricts UI imports and browser globals
+in the model and solver. Run `npm test -- src/solver` for the seven documented
+solver cases and numerical/diagnostic tests. See `docs/SOLVER.md` for the API;
+fitting is not yet invoked by the drawing UI.
 The JSON schema remains at version 1; unsupported versions are rejected.
 
 IBM Plex Mono regular and semibold Latin webfonts are bundled under `public/fonts`

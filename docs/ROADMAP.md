@@ -36,9 +36,14 @@ properties, drag/delete, undo/redo, navigation, file handling, and autosave reco
 
 ## M2: solver (no UI)
 
-- `fit(block)`: Levenberg–Marquardt as in `SOLVER.md`, constraints generated from the sketch (right angles where the sketch is within 5° of 90°).
-- Residuals, rigidity check, flagging.
-- All cases in `examples/solver-cases.md` as unit tests, passing.
+- [x] `fit(block)`: Levenberg–Marquardt as in `SOLVER.md`, constraints generated from the sketch (right angles where the sketch is within 5° of 90°).
+- [x] Residuals, rigidity check, flagging.
+- [x] All cases in `examples/solver-cases.md` as unit tests, passing.
+
+M2 is a pure solver API with central-difference Jacobians, dense damped solves,
+explicit hard constraints, doorway alignment, and optional leave-one-out diagnostics.
+It is not wired into the UI. The schema-1 doorway pairing rule and API are documented
+in `SOLVER.md`. Tests, build, and lint pass.
 
 ## M3: survey mode
 

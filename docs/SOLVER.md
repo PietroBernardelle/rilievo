@@ -36,3 +36,61 @@ Each room is fitted on its inside faces. Two rooms sharing a wall are tied by a 
 
 ## Tests
 See `examples/solver-cases.md`. Every case is a unit test that must pass before survey mode is wired to the UI.
+
+## M2 API and numerical conventions
+
+`src/solver/index.ts` exports `fit(block, options?)`, `leaveOneOut(block, options?)`,
+and `resolvePoint(block, pointRef)`. These functions are pure; they do not mutate
+the input, import React/DOM, or run automatically in the sketch UI.
+
+- `fit` returns a fitted `block`, measurement `residuals`, normalised measurement
+  `rms`, `worstMeasurementId`, per-room rigidity diagnostics (including a suggested
+  independent distance when under-constrained), and `generatedConstraints`.
+- It also reports `converged`, `iterations` and `hardError`. An exhausted or stalled
+  solve returns its last feasible iterate with `converged: false`; callers must
+  inspect that status before treating the result as a completed fit.
+- `options.tolerance` defaults to 0.015 m; `options.maxIterations` defaults to 120.
+  Each recorded measurement's positive `sigma` supplies its weight. Join sigma
+  defaults to `hypot(0.002, 0.005)` m. Right-angle priors use a 2° sigma and the
+  schema example's weight 0.1; they are generated within 5° of perpendicular.
+  Explicit perpendicular constraints override generation for the same edge pair.
+- The first room's first corner is exactly `(0, 0)` and its first edge points
+  along +x. Sketch priors are transformed into that same reference frame, while
+  the stored `sketch` positions remain unchanged. LM retains full precision;
+  the model's JSON writer rounds stored coordinates to 0.0001 m.
+- Hard perpendicular/parallel/collinear constraints use equality rows in the
+  damped linear solve, rather than a large soft weight. Convergence requires
+  their residuals below 1e-8 (radians for angles, metres for offsets).
+- Only `done` measurements with non-null values enter the fit. Distance, offset
+  and thickness records use their two point references. Height records remain
+  outside the 2D fit and are returned in `deferredMeasurementIds`. No measurement
+  status or value is changed by fitting.
+- Rigidity uses the rank of the measured-distance Jacobian, excluding priors and
+  joins. Unknown opening offsets are eliminated from that rank count so that
+  jamb measurements do not falsely imply independent corner constraints.
+- `leaveOneOut` returns one refit summary per omitted measurement, ordered by
+  the remaining measurements' normalised RMS. It leaves the source history intact.
+
+### Pairing doorway records without changing schema 1
+
+A join's `via` identifies an opening on either of its joined edges. The opposite
+edge must contain exactly one opening with the same type and width (within
+0.0001 m). Zero or multiple matches produce a descriptive error. This rule was
+confirmed for M2; no additional join fields are introduced.
+
+For CCW rooms, facing walls run in opposite directions. Jamb side 0 on one room
+therefore aligns with side 1 on the other, separated along the first wall's outward
+normal by `join.thickness`. The two measured corner-to-jamb distances in solver
+case 6 are explicit `offset` measurements, so fitting cannot slide the opening
+positions in place of aligning the rooms.
+
+### Verification
+
+All seven cases from `examples/solver-cases.md` are executable tests in
+`src/solver/__tests__/solver-cases.test.ts`. Additional tests exercise hard and
+redundant constraints, rank deficiency, opening/edge references, gauge fixing,
+iteration limits, invalid inputs, and the linear algebra routines.
+
+```sh
+npm test -- src/solver
+```
