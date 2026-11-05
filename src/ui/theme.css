@@ -372,6 +372,11 @@ input:focus-visible {
   stroke: var(--color-selected);
   stroke-width: 1;
 }
+
+.sketch-contacts {
+  fill: var(--color-wall);
+  opacity: 0.75;
+}
 .project-tree {
   list-style: none;
   padding: 0;

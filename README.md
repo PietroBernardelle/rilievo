@@ -2,8 +2,10 @@
 
 Sketch a building roughly, then let the app walk you through the laser measurements and fit the sketch to them. Built for surveying a house room by room (later: other floors, the garden) and exporting clean plans.
 
-Status: **M3 complete** — guided survey mode connects the sketch to the solver,
+Status: **M3.1 complete** — guided survey mode connects the sketch to the solver,
 with room consistency checks, re-measure suggestions and undoable readings.
+Attached unmeasured rooms follow fitted neighbours; small cyan dots mark active
+sketch contacts. Contacts release once both rooms have done measurements.
 Opening tools, height/join workflow steps and exports come in later milestones.
 
 ## Development

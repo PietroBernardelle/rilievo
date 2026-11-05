@@ -7,6 +7,7 @@ import type { MeasurementResidual } from '../solver/diagnostics';
 import { pickSurveyPoint } from '../survey/points';
 import { resolvePoint } from '../solver/geometry';
 import { SurveyOverlay } from './SurveyOverlay';
+import { ContactMarkers } from './ContactMarkers';
 import { GRID_STEP, rectanglePoints, snapPoint } from '../tools/snapping';
 import {
   fitView,
@@ -502,6 +503,9 @@ export function DrawingCanvas(props: Props) {
           </g>
         );
       })}
+      {block && gesture?.type !== 'corner' && (
+        <ContactMarkers block={block} view={view} />
+      )}
       {props.survey && block && (
         <SurveyOverlay
           block={block}

@@ -72,6 +72,18 @@ remain as rejected history. Blocked endpoints and custom measurements use schema
 point references. Survey progress survives JSON save/open and autosave reload;
 press S to resume. Opening/height/join workflow steps remain in M4.
 
+## M3.1: attached rooms follow fitted neighbours
+
+- [x] Detect corner–corner and corner–edge contacts within 1 mm in sketch coordinates.
+- [x] Couple contacts with 5 mm soft residuals while either room has no done readings.
+- [x] Preserve unmeasured room edge lengths with 0.10 m priors and a weak 10 m position anchor.
+- [x] Fit contacted rooms together; keep disconnected rooms separate and the first-room gauge fixed.
+- [x] Show active attachments as small cyan dots, with no project schema change.
+- [x] Test following, stretching, free neighbour movement, contact release and isolated rooms.
+
+Corner–edge contacts retain their sketched fraction. Measured neighbours may shift;
+cross-room measurements can constrain the space and make the middle room stretch.
+
 ## M4: openings, heights, joins
 
 - Door (`D`), window (`W`) and arch tools on edges; their measurements are added to the queue.
