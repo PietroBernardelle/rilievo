@@ -1,10 +1,16 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { area, parseLength, perimeter, roomPoints } from '../model/geometry';
 import type { Block, Project, Room } from '../model/types';
+import type { RoomDiagnostics } from '../solver/diagnostics';
+import { roomStatus } from '../survey/queue';
 interface Props {
   project: Project;
   activeBlock: Block | undefined;
   selectedRoom: Room | undefined;
+  diagnostics: RoomDiagnostics[];
+  settings: ReactNode;
+  queue: ReactNode;
   onBlock: (id: string) => void;
   onSelect: (id: string) => void;
   onUpdate: (changes: { name?: string; height?: number }) => boolean;
@@ -21,7 +27,7 @@ function RoomProperties({
   const [name, setName] = useState(room.name);
   const [height, setHeight] = useState(room.height.toFixed(3));
   const [error, setError] = useState('');
-  const points = roomPoints(block, room);
+  const points = roomPoints(block, room, false);
   function saveHeight(): void {
     try {
       const value = parseLength(height);
@@ -85,7 +91,12 @@ function RoomProperties({
         <dt>Perimeter</dt>
         <dd>{perimeter(points).toFixed(3)} m</dd>
       </dl>
-      <p className="property-note">From sketch · metres</p>
+      <p className="property-note">
+        {block.measurements.some((item) => item.status === 'done')
+          ? 'From fitted plan'
+          : 'From sketch'}{' '}
+        · metres
+      </p>
     </div>
   );
 }
@@ -93,16 +104,16 @@ export function ProjectPanel({
   project,
   activeBlock,
   selectedRoom,
+  diagnostics,
+  settings,
+  queue,
   onBlock,
   onSelect,
   onUpdate,
 }: Props) {
-  const done =
-    activeBlock?.measurements.filter((item) => item.status === 'done').length ??
-    0;
-  const total = activeBlock?.measurements.length ?? 0;
   return (
     <aside className="project-panel" aria-label="Project inspector">
+      {settings}
       <section className="panel-section" aria-labelledby="blocks-heading">
         <h2 id="blocks-heading">Blocks</h2>
         {project.blocks.length ? (
@@ -126,17 +137,35 @@ export function ProjectPanel({
         <h2 id="rooms-heading">Rooms</h2>
         {activeBlock?.rooms.length ? (
           <ul className="project-tree">
-            {activeBlock.rooms.map((room) => (
-              <li key={room.id}>
-                <button
-                  type="button"
-                  aria-current={selectedRoom?.id === room.id}
-                  onClick={() => onSelect(room.id)}
-                >
-                  {room.name}
-                </button>
-              </li>
-            ))}
+            {activeBlock.rooms.map((room) => {
+              const diagnostic = diagnostics.find(
+                (item) => item.roomId === room.id,
+              );
+              const status = diagnostic ? roomStatus(diagnostic) : null;
+              return (
+                <li key={room.id}>
+                  <button
+                    type="button"
+                    aria-current={selectedRoom?.id === room.id}
+                    onClick={() => onSelect(room.id)}
+                  >
+                    {room.name}
+                    {status && (
+                      <small
+                        className={`room-status ${status.replaceAll(' ', '-')}`}
+                      >
+                        {status}
+                        {status === 'rigid but unchecked'
+                          ? room.vertexIds.length === 4
+                            ? ' · measure the second diagonal'
+                            : ' · add a check measurement'
+                          : ''}
+                      </small>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <p className="empty-message">No rooms</p>
@@ -155,20 +184,7 @@ export function ProjectPanel({
           <p className="empty-message">Nothing selected</p>
         )}
       </section>
-      <section
-        className="panel-section queue-panel"
-        aria-labelledby="queue-heading"
-      >
-        <div className="panel-heading">
-          <h2 id="queue-heading">Queue</h2>
-          <span>
-            {done}/{total}
-          </span>
-        </div>
-        <p className="empty-message">
-          {total ? 'Survey not yet available' : 'No measurements'}
-        </p>
-      </section>
+      {queue}
     </aside>
   );
 }

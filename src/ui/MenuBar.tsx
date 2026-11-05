@@ -11,6 +11,10 @@ interface Props {
   onRedo: () => void;
   onDelete: () => void;
   onFit: () => void;
+  surveying: boolean;
+  onSurvey: () => void;
+  onCustom: () => void;
+  onSettings: () => void;
 }
 export function MenuBar(props: Props) {
   const [open, setOpen] = useState<string | null>(null);
@@ -34,9 +38,21 @@ export function MenuBar(props: Props) {
           disabled: !props.canRedo,
         },
         { label: 'Delete', run: props.onDelete, disabled: !props.canDelete },
+        { label: 'Settings…', run: props.onSettings },
       ],
     },
     { label: 'View', items: [{ label: 'Fit all · F', run: props.onFit }] },
+    {
+      label: 'Survey',
+      items: [
+        {
+          label: props.surveying ? 'Stop survey · S' : 'Start survey · S',
+          run: props.onSurvey,
+        },
+        { label: 'Custom measurement · M', run: props.onCustom },
+        { label: 'Settings…', run: props.onSettings },
+      ],
+    },
   ];
   useEffect(() => {
     const close = (event: PointerEvent): void => {
@@ -88,7 +104,7 @@ export function MenuBar(props: Props) {
             )}
           </div>
         ))}
-        {['Survey', 'Export'].map((label) => (
+        {['Export'].map((label) => (
           <button key={label} className="menu-button" type="button" disabled>
             {label}
           </button>
@@ -113,6 +129,12 @@ export function MenuBar(props: Props) {
             Properties: Enter or Tab applies
             <br />
             File New and Open are undoable
+            <br />
+            S survey · M custom measurement
+            <br />
+            Enter saves a reading and fits
+            <br />
+            Survey Redo re-measures the last reading
           </div>
         </details>
       </nav>

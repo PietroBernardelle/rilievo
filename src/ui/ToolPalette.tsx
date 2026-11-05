@@ -41,11 +41,11 @@ export function ToolPalette({
           key={label}
           className="tool-button bevel"
           type="button"
-          disabled={!['V', 'R', 'P', 'Space'].includes(shortcut)}
+          disabled={!['V', 'R', 'P', 'M', 'Space'].includes(shortcut)}
           aria-pressed={tool === shortcut}
           onClick={() => onTool(shortcut as Tool)}
           aria-label={`${label} (${shortcut})`}
-          title={`${label} (${shortcut})${['V', 'R', 'P', 'Space'].includes(shortcut) ? '' : ' — coming in a later milestone'}`}
+          title={`${label} (${shortcut})${['V', 'R', 'P', 'M', 'Space'].includes(shortcut) ? '' : ' — coming in a later milestone'}`}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path d={path} />

@@ -1,5 +1,5 @@
 import type { Point } from '../model/types';
-export type Tool = 'V' | 'R' | 'P' | 'Space';
+export type Tool = 'V' | 'R' | 'P' | 'M' | 'Space';
 export interface Selection {
   roomId: string;
   vertexId?: string;

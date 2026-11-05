@@ -427,3 +427,181 @@ input:focus-visible {
 .coordinates {
   min-width: 210px;
 }
+
+.room.dimmed {
+  opacity: 0.24;
+}
+.room-status {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 4px;
+  padding: 3px 4px;
+  background: var(--color-drawing);
+  color: var(--color-selected);
+  font-size: 10px;
+}
+.room-status.consistent {
+  color: var(--color-measurement-done);
+}
+.room-status.inconsistent {
+  color: var(--color-measurement-flagged);
+}
+.room-status.rigid-but-unchecked {
+  color: var(--color-dimension);
+}
+.measurement-queue {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+.measurement-queue li {
+  position: relative;
+  margin-bottom: 3px;
+}
+.queue-item {
+  display: block;
+  width: 100%;
+  padding: 7px 5px;
+  border: 1px solid transparent;
+  background: var(--color-drawing);
+  color: var(--color-wall);
+  text-align: left;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.queue-item small {
+  display: block;
+  margin-top: 4px;
+  line-height: 1.5;
+  font-size: 10px;
+}
+.done .queue-item {
+  color: var(--color-measurement-done);
+}
+.unchecked .queue-item {
+  color: var(--color-dimension);
+}
+.skipped .queue-item {
+  color: #a0a0a0;
+}
+.flagged .queue-item {
+  color: var(--color-measurement-flagged);
+}
+.queue-item[aria-current='true'] {
+  border-color: var(--color-measurement-current);
+}
+.queue-item:focus-visible {
+  outline-color: var(--color-selected);
+}
+.queue-order {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 3px;
+}
+.queue-order button {
+  padding: 0 8px;
+}
+.queue-finished,
+.suspect-panel {
+  font-size: 11px;
+  line-height: 1.5;
+}
+.suspect-panel h3 {
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+.suspect-panel p {
+  margin: 4px 0;
+}
+.suspect-panel ol {
+  padding-left: 22px;
+}
+.suspect-panel button {
+  border: 0;
+  padding: 3px 0;
+  text-align: left;
+  color: #800000;
+  text-decoration: underline;
+}
+.survey-command {
+  flex-wrap: wrap;
+}
+.survey-prompt {
+  flex: 1 1 300px;
+  font-size: 12px;
+}
+.survey-prompt p {
+  color: #800000;
+  margin-top: 4px;
+}
+.survey-command #survey-value {
+  flex: 0 0 100px;
+  width: 100px;
+  padding: 5px;
+  border: 2px solid;
+  border-color: var(--color-bevel-dark) var(--color-bevel-light)
+    var(--color-bevel-light) var(--color-bevel-dark);
+  background: white;
+}
+.survey-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.survey-actions button {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.blocked-end {
+  display: flex;
+  gap: 10px;
+  margin: 0;
+  padding: 3px 8px;
+  border: 1px solid var(--color-bevel-dark);
+  font-size: 11px;
+}
+.blocked-end label {
+  display: flex;
+  gap: 4px;
+}
+.survey-corner-label {
+  fill: var(--color-selected);
+  font-size: 12px;
+  paint-order: stroke;
+  stroke: black;
+  stroke-width: 3px;
+}
+.measured-line {
+  stroke: var(--color-measurement-done);
+  stroke-width: 1.5px;
+  opacity: 0.45;
+}
+.measured-line.flagged {
+  stroke: var(--color-measurement-flagged);
+  opacity: 1;
+}
+.measured-line.dimmed {
+  opacity: 0.15;
+}
+.current-measurement,
+.picked-measurement-point {
+  fill: black;
+  stroke: var(--color-measurement-current);
+  stroke-width: 2px;
+}
+.survey-arrow {
+  stroke-dasharray: 8 6;
+  animation: survey-dashes 1s linear infinite;
+}
+@keyframes survey-dashes {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .survey-arrow {
+    animation: none;
+  }
+}

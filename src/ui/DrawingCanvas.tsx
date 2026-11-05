@@ -2,7 +2,11 @@ import { edgeLabels } from '../tools/labels';
 import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { containsPoint, distance, roomPoints } from '../model/geometry';
-import type { Block, Point } from '../model/types';
+import type { Block, Measurement, Point, PointRef } from '../model/types';
+import type { MeasurementResidual } from '../solver/diagnostics';
+import { pickSurveyPoint } from '../survey/points';
+import { resolvePoint } from '../solver/geometry';
+import { SurveyOverlay } from './SurveyOverlay';
 import { GRID_STEP, rectanglePoints, snapPoint } from '../tools/snapping';
 import {
   fitView,
@@ -22,6 +26,14 @@ interface Props {
   selection: Selection | null;
   resetToken: number;
   fitToken: number;
+  survey: boolean;
+  currentMeasurement: Measurement | undefined;
+  surveyRoomId: string | undefined;
+  residuals: MeasurementResidual[];
+  pickMode: 'custom' | 'blocked' | null;
+  pickedPoint: PointRef | undefined;
+  onPickPoint: (point: PointRef) => void;
+  onSurveyFocus: () => void;
   onSelect: (selection: Selection | null) => void;
   onCreate: (points: Point[]) => boolean;
   onMove: (vertexId: string, point: Point) => void;
@@ -205,7 +217,16 @@ export function DrawingCanvas(props: Props) {
   };
   useEffect(() => {
     const keyDown = (event: KeyboardEvent) => {
-      if (isTextInput(event.target)) return;
+      if (
+        isTextInput(event.target) &&
+        !(
+          event.code === 'Space' &&
+          event.target instanceof HTMLInputElement &&
+          event.target.id === 'survey-value' &&
+          !event.target.value
+        )
+      )
+        return;
       if (event.code === 'Space') {
         event.preventDefault();
         setSpace(true);
@@ -271,6 +292,22 @@ export function DrawingCanvas(props: Props) {
     };
     lastScreen.current = screen;
     const raw = toWorld(screen, view);
+    if (props.pickMode && block) {
+      const ref = pickSurveyPoint(
+        block,
+        raw,
+        12 / view.scale,
+        props.pickMode === 'blocked',
+      );
+      return {
+        screen,
+        raw,
+        next: {
+          point: ref ? resolvePoint(block, ref) : raw,
+          snap: ref ? ('vertex' in ref ? 'corner' : 'edge') : null,
+        },
+      };
+    }
     const target = snapPoint(
       raw,
       block,
@@ -297,6 +334,30 @@ export function DrawingCanvas(props: Props) {
     }
     setCursor(next);
     onCursor(next);
+    if (props.survey && block) {
+      if (props.pickMode) {
+        const ref = pickSurveyPoint(
+          block,
+          raw,
+          12 / view.scale,
+          props.pickMode === 'blocked',
+        );
+        if (ref) props.onPickPoint(ref);
+        else
+          onMessage(
+            props.pickMode === 'blocked'
+              ? 'Click inside an edge to choose a reachable point.'
+              : 'Click a corner, jamb or point on an edge.',
+          );
+      } else {
+        const room = [...block.rooms]
+          .reverse()
+          .find((item) => containsPoint(roomPoints(block, item, false), raw));
+        onSelect(room ? { roomId: room.id } : null);
+        props.onSurveyFocus();
+      }
+      return;
+    }
     if (tool === 'R') {
       if (!draft[0]) setDraft([next.point]);
       else if (onCreate(rectanglePoints(draft[0], next.point))) {
@@ -361,6 +422,7 @@ export function DrawingCanvas(props: Props) {
     setGesture(null);
     if (event.currentTarget.hasPointerCapture(event.pointerId))
       event.currentTarget.releasePointerCapture(event.pointerId);
+    if (props.survey && !props.pickMode) props.onSurveyFocus();
   }
   const preview =
     tool === 'R' && draft[0] && cursor
@@ -409,7 +471,7 @@ export function DrawingCanvas(props: Props) {
         return (
           <g
             key={room.id}
-            className={selected ? 'room selected' : 'room'}
+            className={`${selected ? 'room selected' : 'room'}${props.survey && props.surveyRoomId && props.surveyRoomId !== room.id ? ' dimmed' : ''}`}
             data-room-id={room.id}
           >
             <polygon points={screens.map((p) => `${p.x},${p.y}`).join(' ')} />
@@ -440,6 +502,18 @@ export function DrawingCanvas(props: Props) {
           </g>
         );
       })}
+      {props.survey && block && (
+        <SurveyOverlay
+          block={block}
+          current={
+            props.pickMode === 'custom' ? undefined : props.currentMeasurement
+          }
+          picked={props.pickedPoint}
+          view={view}
+          residuals={props.residuals}
+          roomId={props.surveyRoomId}
+        />
+      )}
       {preview.length > 0 && (
         <g className="draft" pointerEvents="none">
           <polyline

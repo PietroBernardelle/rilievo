@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { commit, createHistory, redo, undo } from '../model/history';
 import { loadProject, saveProject } from '../model/json';
 import {
@@ -9,7 +9,23 @@ import {
   moveCorner,
   updateRoom,
 } from '../model/project';
-import type { Point, Project } from '../model/types';
+import type { Point, PointRef, Project } from '../model/types';
+import { moveMeasurement, updatePlacementSigma } from '../model/measurements';
+import { consistencyDiagnostics } from '../solver/diagnostics';
+import {
+  addCustomMeasurement,
+  currentMeasurement,
+  replaceBlockedPoint,
+  selectMeasurement,
+  skipCurrent,
+  startSurvey,
+  submitMeasurement,
+} from '../survey/session';
+import type { EditorState } from '../survey/session';
+import { measurementPrompt, measurementRoom } from '../survey/points';
+import { SurveyPanel } from './SurveyPanel';
+import { SurveyCommand } from './SurveyCommand';
+import { SettingsPanel } from './SettingsPanel';
 import { DrawingCanvas } from './DrawingCanvas';
 import { MenuBar } from './MenuBar';
 import { ProjectPanel } from './ProjectPanel';
@@ -41,20 +57,49 @@ const PROMPTS: Record<Tool, string> = {
   V: 'Select a room or corner. Drag a corner to move. Delete removes the selection.',
   R: 'RECTANGLE: click two opposite corners. Shift disables snap. Esc cancels.',
   P: 'POLYGON: click corners; Enter or click the first corner to close. Esc cancels.',
+  M: 'MEASURE: click two corners, jambs or points on edges.',
   Space: 'PAN: drag the drawing. Wheel zooms around the cursor. F fits all.',
 };
 export function App() {
   const [initial] = useState(_initialProject);
-  const [history, setHistory] = useState(() => createHistory(initial.project));
+  const [history, setHistory] = useState(() =>
+    createHistory<EditorState>({ project: initial.project, survey: null }),
+  );
   // A blur commit and a canvas action can happen in the same browser event.
   // Keep their history updates sequential before React renders the next frame.
   const historyRef = useRef(history);
-  const project = history.present;
+  const state = history.present;
+  const project = state.project;
   const [activeId, setActiveId] = useState<string | null>(
     project.blocks[0]?.id ?? null,
   );
   const activeBlock =
-    project.blocks.find((block) => block.id === activeId) ?? project.blocks[0];
+    project.blocks.find(
+      (block) => block.id === (state.survey?.blockId ?? activeId),
+    ) ?? project.blocks[0];
+  const surveying = !!state.survey && activeBlock?.id === state.survey.blockId;
+  const current = currentMeasurement(state);
+  const diagnostics = useMemo(
+    () =>
+      activeBlock
+        ? consistencyDiagnostics(activeBlock, project.settings.tolerance)
+        : null,
+    [activeBlock, project.settings.tolerance],
+  );
+  const [picking, setPicking] = useState<
+    | { kind: 'custom'; first?: PointRef }
+    | { kind: 'blocked'; end: 'a' | 'b' }
+    | null
+  >(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const commandRef = useRef<HTMLInputElement>(null);
+  const lastMeasurement =
+    activeBlock?.measurements.find(
+      (item) => item.id === state.survey?.lastId && item.status === 'done',
+    ) ??
+    activeBlock?.measurements
+      .filter((item) => item.status === 'done' && item.kind !== 'height')
+      .at(-1);
   const [selection, setSelection] = useState<Selection | null>(null);
   const selectedRoom = activeBlock?.rooms.find(
     (room) => room.id === selection?.roomId,
@@ -75,12 +120,27 @@ export function App() {
       );
     }
   }
-  function apply(next: Project): void {
+  function applyState(next: EditorState): void {
     if (next === historyRef.current.present) return;
+    if (next.survey?.currentId !== historyRef.current.present.survey?.currentId)
+      selectCurrentRoom(next);
     historyRef.current = commit(historyRef.current, next);
     setHistory(historyRef.current);
     setMessage('');
-    persist(next);
+    persist(next.project);
+  }
+  function selectCurrentRoom(next: EditorState): void {
+    const measurement = currentMeasurement(next);
+    const block = next.project.blocks.find(
+      (item) => item.id === next.survey?.blockId,
+    );
+    const room =
+      block && measurement ? measurementRoom(block, measurement) : undefined;
+    if (room) setSelection({ roomId: room.id });
+  }
+  function apply(next: Project): void {
+    if (next === historyRef.current.present.project) return;
+    applyState({ ...historyRef.current.present, project: next });
   }
   function attempt(action: () => void): boolean {
     try {
@@ -99,9 +159,16 @@ export function App() {
     setResetToken((value) => value + 1);
     setCursor(null);
     setMessage('');
+    setPicking(null);
   }
   function changeTool(next: Tool): void {
+    if (next === 'M') {
+      beginCustom();
+      return;
+    }
     cancel();
+    if (historyRef.current.present.survey && next !== 'Space')
+      applyState({ ...historyRef.current.present, survey: null });
     setTool(next);
   }
   function travel(direction: 'undo' | 'redo'): void {
@@ -110,9 +177,12 @@ export function App() {
     if (next === current) return;
     cancel();
     setSelection(null);
+    selectCurrentRoom(next.present);
     historyRef.current = next;
     setHistory(next);
-    persist(next.present);
+    persist(next.present.project);
+    if (next.present.survey) setActiveId(next.present.survey.blockId);
+    setTool('V');
   }
   function remove(): void {
     if (!selection || !activeBlock) return;
@@ -120,12 +190,12 @@ export function App() {
       apply(
         selection.vertexId
           ? deleteCorner(
-              historyRef.current.present,
+              historyRef.current.present.project,
               activeBlock.id,
               selection.vertexId,
             )
           : deleteRoom(
-              historyRef.current.present,
+              historyRef.current.present.project,
               activeBlock.id,
               selection.roomId,
             ),
@@ -139,14 +209,17 @@ export function App() {
     cancel();
     setSelection(null);
     setActiveId(null);
-    apply(createProject(new Date().toISOString()));
+    applyState({
+      project: createProject(new Date().toISOString()),
+      survey: null,
+    });
     setFitToken((value) => value + 1);
   }
   function saveFile(): void {
     if (document.activeElement instanceof HTMLElement)
       document.activeElement.blur();
     attempt(() => {
-      const blob = new Blob([saveProject(historyRef.current.present)], {
+      const blob = new Blob([saveProject(historyRef.current.present.project)], {
         type: 'application/json',
       });
       const url = URL.createObjectURL(blob);
@@ -168,7 +241,7 @@ export function App() {
       cancel();
       setSelection(null);
       setActiveId(next.blocks[0]?.id ?? null);
-      apply(next);
+      applyState({ project: next, survey: null });
       setFitToken((value) => value + 1);
     } catch (error) {
       setMessage(
@@ -176,6 +249,88 @@ export function App() {
       );
     }
   }
+  function focusCommand(): void {
+    commandRef.current?.focus();
+  }
+  function toggleSurvey(): void {
+    cancel();
+    setTool('V');
+    if (historyRef.current.present.survey)
+      applyState({ ...historyRef.current.present, survey: null });
+    else if (activeBlock)
+      attempt(() => {
+        applyState(
+          startSurvey(
+            historyRef.current.present,
+            activeBlock.id,
+            selectedRoom?.id,
+          ),
+        );
+        setFitToken((value) => value + 1);
+      });
+    else setMessage('Draw a room before starting the survey.');
+  }
+  function chooseMeasurement(id: string): void {
+    cancel();
+    attempt(() => {
+      const next = historyRef.current.present.survey
+        ? historyRef.current.present
+        : startSurvey(historyRef.current.present, activeBlock!.id);
+      applyState(selectMeasurement(next, id));
+      setTool('V');
+      focusCommand();
+    });
+  }
+  function beginCustom(): void {
+    cancel();
+    if (
+      attempt(() => {
+        if (!historyRef.current.present.survey) {
+          if (!activeBlock) throw new Error('Draw a room before measuring.');
+          applyState(startSurvey(historyRef.current.present, activeBlock.id));
+          setFitToken((value) => value + 1);
+        }
+      })
+    ) {
+      setTool('M');
+      setPicking({ kind: 'custom' });
+    }
+  }
+  function pickPoint(point: PointRef): void {
+    if (!picking) return;
+    if (picking.kind === 'custom' && !picking.first) {
+      setPicking({ ...picking, first: point });
+      return;
+    }
+    if (
+      attempt(() =>
+        applyState(
+          picking.kind === 'blocked'
+            ? replaceBlockedPoint(
+                historyRef.current.present,
+                picking.end,
+                point,
+              )
+            : addCustomMeasurement(
+                historyRef.current.present,
+                picking.first!,
+                point,
+              ),
+        ),
+      )
+    ) {
+      setPicking(null);
+      setTool('V');
+    }
+  }
+  function cancelSurveyAction(): void {
+    cancel();
+    setTool('V');
+    focusCommand();
+  }
+  useEffect(() => {
+    if (surveying && !picking && !settingsOpen) commandRef.current?.focus();
+  }, [surveying, state.survey?.currentId, resetToken, picking, settingsOpen]);
   useEffect(() => {
     const keyDown = (event: KeyboardEvent): void => {
       const modifier = event.ctrlKey || event.metaKey;
@@ -185,7 +340,36 @@ export function App() {
         saveFile();
         return;
       }
-      // Inputs use native text undo while being edited; Enter/blur commits one project edit.
+      if (event.target === commandRef.current) {
+        if (modifier && key === 'z') {
+          event.preventDefault();
+          travel(event.shiftKey ? 'redo' : 'undo');
+          return;
+        }
+        if (key === 'escape') {
+          event.preventDefault();
+          cancelSurveyAction();
+          return;
+        }
+        if (!modifier && !event.altKey && commandRef.current?.value === '') {
+          if (key === 'm') {
+            event.preventDefault();
+            beginCustom();
+            return;
+          }
+          if (key === 's') {
+            event.preventDefault();
+            toggleSurvey();
+            return;
+          }
+          if (key === 'f') {
+            event.preventDefault();
+            setFitToken((value) => value + 1);
+            return;
+          }
+        }
+      }
+      // Other inputs use native text undo until their edit is committed.
       if (isTextInput(event.target)) return;
       if (modifier && key === 'z') {
         event.preventDefault();
@@ -193,6 +377,16 @@ export function App() {
         return;
       }
       if (modifier || event.altKey) return;
+      if (key === 's') {
+        event.preventDefault();
+        toggleSurvey();
+        return;
+      }
+      if (key === 'm') {
+        event.preventDefault();
+        beginCustom();
+        return;
+      }
       if (key === 'v' || key === 'r' || key === 'p') {
         event.preventDefault();
         changeTool(key.toUpperCase() as Tool);
@@ -201,7 +395,7 @@ export function App() {
         event.preventDefault();
         setFitToken((value) => value + 1);
       }
-      if (key === 'delete' || key === 'backspace') {
+      if (!surveying && (key === 'delete' || key === 'backspace')) {
         event.preventDefault();
         remove();
       }
@@ -212,7 +406,7 @@ export function App() {
   function draw(points: Point[]): boolean {
     return attempt(() => {
       const result = createRoom(
-        historyRef.current.present,
+        historyRef.current.present.project,
         activeBlock?.id ?? null,
         points,
         DEFAULT_ROOM_HEIGHT,
@@ -228,7 +422,11 @@ export function App() {
         projectName={project.name}
         canUndo={history.past.length > 0}
         canRedo={history.future.length > 0}
-        canDelete={!!selectedRoom}
+        canDelete={!!selectedRoom && !surveying}
+        surveying={surveying}
+        onSurvey={toggleSurvey}
+        onCustom={beginCustom}
+        onSettings={() => setSettingsOpen((value) => !value)}
         onNew={newFile}
         onOpen={() => inputRef.current?.click()}
         onSave={saveFile}
@@ -259,6 +457,18 @@ export function App() {
             selection={selectedRoom ? selection : null}
             resetToken={resetToken}
             fitToken={fitToken}
+            survey={surveying}
+            currentMeasurement={current}
+            surveyRoomId={
+              current && activeBlock
+                ? measurementRoom(activeBlock, current)?.id
+                : selectedRoom?.id
+            }
+            residuals={diagnostics?.residuals ?? []}
+            pickMode={picking?.kind ?? null}
+            pickedPoint={picking?.kind === 'custom' ? picking.first : undefined}
+            onPickPoint={pickPoint}
+            onSurveyFocus={focusCommand}
             onSelect={(next) => {
               setSelection(next);
               setMessage('');
@@ -269,7 +479,7 @@ export function App() {
                 attempt(() =>
                   apply(
                     moveCorner(
-                      historyRef.current.present,
+                      historyRef.current.present.project,
                       activeBlock.id,
                       id,
                       point,
@@ -279,26 +489,77 @@ export function App() {
             }}
             onCursor={setCursor}
             onMessage={setMessage}
-            onCancel={() => changeTool('V')}
+            onCancel={() =>
+              surveying ? cancelSurveyAction() : changeTool('V')
+            }
           />
         </main>
         <ProjectPanel
           project={project}
           activeBlock={activeBlock}
           selectedRoom={selectedRoom}
+          diagnostics={diagnostics?.rooms ?? []}
+          settings={
+            settingsOpen && (
+              <SettingsPanel
+                key={project.settings.placementSigma}
+                placementSigma={project.settings.placementSigma}
+                onClose={() => setSettingsOpen(false)}
+                onSave={(value) => {
+                  apply(
+                    updatePlacementSigma(
+                      historyRef.current.present.project,
+                      value,
+                    ),
+                  );
+                  return true;
+                }}
+              />
+            )
+          }
+          queue={
+            <SurveyPanel
+              block={activeBlock}
+              diagnostics={diagnostics}
+              currentId={state.survey?.currentId ?? null}
+              active={surveying}
+              onPick={chooseMeasurement}
+              onMove={(id, direction) => {
+                if (activeBlock)
+                  attempt(() =>
+                    apply(
+                      moveMeasurement(
+                        historyRef.current.present.project,
+                        activeBlock.id,
+                        id,
+                        direction,
+                      ),
+                    ),
+                  );
+                focusCommand();
+              }}
+            />
+          }
           onBlock={(id) => {
             cancel();
             setActiveId(id);
+            if (historyRef.current.present.survey)
+              attempt(() =>
+                applyState(startSurvey(historyRef.current.present, id)),
+              );
             setSelection(null);
             setFitToken((value) => value + 1);
           }}
-          onSelect={(roomId) => setSelection({ roomId })}
+          onSelect={(roomId) => {
+            setSelection({ roomId });
+            if (surveying) focusCommand();
+          }}
           onUpdate={(changes) =>
             activeBlock && selectedRoom
               ? attempt(() =>
                   apply(
                     updateRoom(
-                      historyRef.current.present,
+                      historyRef.current.present.project,
                       activeBlock.id,
                       selectedRoom.id,
                       changes,
@@ -309,18 +570,62 @@ export function App() {
           }
         />
       </div>
-      <section className="command-line" aria-label="Command line">
-        <span aria-hidden="true">&gt;</span>
-        <p role="status">{message || PROMPTS[tool]}</p>
-        <button
-          className="command-button bevel"
-          type="button"
-          onClick={() => changeTool('V')}
-        >
-          Esc
-        </button>
-      </section>
-      <StatusBar cursor={cursor} block={activeBlock} />
+      {surveying ? (
+        <SurveyCommand
+          key={`${current?.id ?? 'finished'}:${current?.status}:${resetToken}`}
+          inputRef={commandRef}
+          current={current}
+          message={message}
+          prompt={
+            picking?.kind === 'blocked'
+              ? 'Pick a reachable point on an edge to replace the blocked corner.'
+              : picking?.kind === 'custom'
+                ? `Custom measurement: pick the ${picking.first ? 'second' : 'first'} corner, jamb or edge point.`
+                : current && activeBlock
+                  ? measurementPrompt(activeBlock, current)
+                  : 'Queue finished. Review room status and re-measure suggestions.'
+          }
+          picking={!!picking}
+          blockedEnd={picking?.kind === 'blocked' ? picking.end : null}
+          canRedo={!!lastMeasurement}
+          onSubmit={(value) =>
+            attempt(() =>
+              applyState(submitMeasurement(historyRef.current.present, value)),
+            )
+          }
+          onSkip={() => {
+            attempt(() => applyState(skipCurrent(historyRef.current.present)));
+            focusCommand();
+          }}
+          onBlocked={() => {
+            setPicking({ kind: 'blocked', end: 'a' });
+            setMessage('');
+          }}
+          onBlockedEnd={(end) => setPicking({ kind: 'blocked', end })}
+          onRedo={() =>
+            lastMeasurement && chooseMeasurement(lastMeasurement.id)
+          }
+          onUndo={() => travel('undo')}
+          onCancel={cancelSurveyAction}
+        />
+      ) : (
+        <section className="command-line" aria-label="Command line">
+          <span aria-hidden="true">&gt;</span>
+          <p role="status">{message || PROMPTS[tool]}</p>
+          <button
+            className="command-button bevel"
+            type="button"
+            onClick={() => changeTool('V')}
+          >
+            Esc
+          </button>
+        </section>
+      )}
+      <StatusBar
+        cursor={cursor}
+        block={activeBlock}
+        residuals={diagnostics?.residuals ?? []}
+      />
     </div>
   );
 }
