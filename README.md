@@ -2,8 +2,9 @@
 
 Sketch a building roughly, then let the app walk you through the laser measurements and fit the sketch to them. Built for surveying a house room by room (later: other floors, the garden) and exporting clean plans.
 
-Status: **M0 complete** — the empty CAD workspace and development toolchain are in place.
-Drawing, saving, fitting, surveying, and exports come in later milestones; their controls are disabled in this scaffold.
+Status: **M1 complete** — sketch rooms, edit corners and properties, undo changes,
+and save/open schema-version-1 projects. Fitting, survey tools, openings, and exports
+come in later milestones.
 
 ## Development
 
@@ -29,17 +30,46 @@ The Vite and lint tool versions support the installed Node.js 22.10 runtime.
 The scoped `minimatch` override patches the lint parser's transitive dependency
 ([GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)); keep it until the parser upgrades its dependency.
 
+## Try sketching
+
+1. Press **R**, then click two opposite corners of a rectangle. The first room
+   automatically creates **Piano terra**. New rooms start at **2.700 m** height.
+2. Press **P** and click polygon corners. Press **Enter** or click the first corner
+   to close. **Esc** discards the unfinished shape.
+3. Press **V** to select a room or corner. Drag a corner to move it. **Delete**
+   removes the selection; deleting a corner from a triangle removes its room.
+4. Select a room in the drawing or tree. Edit its name or height in Properties;
+   **Enter** or leaving the field commits one edit. Heights accept `2,700`, `270cm`,
+   and `2700mm`. Area and perimeter use the sketch coordinates.
+5. Use the wheel to zoom around the cursor, **Space+drag** or middle-button drag
+   to pan, and **F** to fit all rooms. The white square identifies a snap target.
+   Corners take priority over edges, then the 0.100 m grid; **Shift** disables snap.
+6. **Ctrl+Z / Ctrl+Shift+Z** undo/redo completed edits, including New and Open.
+   Command-key equivalents work on macOS. While typing in a property field,
+   native text undo applies until the edit is committed.
+7. **File > Save JSON** downloads the project; **File > Open** accepts the supplied
+   `examples/sample-project.json`. Each committed edit autosaves to localStorage,
+   and reloading restores it. Keep downloaded files as backups. Undo history lasts
+   for the current session.
+
+Live dimensions stay readable in screen pixels while zooming. At distant zoom
+levels, grid dots are thinned for legibility; snapping always uses 0.100 m.
+Moving a corner by hand updates both its current and sketch coordinates.
+Deleting geometry removes dependent wall/opening/join metadata and rejects affected
+measurements while preserving their historical endpoints. Unaffected edge references
+are reindexed. Invalid files and invalid polygon edits leave the project intact.
+
 ## Source layout
 
-- `src/model`: pure project types, JSON handling, and migrations (M1 onward).
+- `src/model`: pure project types, editing, geometry, JSON validation, and undo history.
 - `src/solver`: pure fitting and diagnostics (M2).
 - `src/ui`: React components and the CAD theme.
-- `src/tools`: drawing tools (M1 onward).
+- `src/tools`: pure snapping and viewport helpers.
 - `src/export`: export formats (M5).
 
-The model and solver folders are placeholders; no schema changes or geometry logic
-are introduced in M0. Vitest runs in Node by default, and ESLint restricts UI imports
-and browser globals in those folders.
+The solver folder remains a placeholder for M2. Vitest runs in Node by default,
+and ESLint restricts UI imports and browser globals in the model and solver.
+The JSON schema remains at version 1; unsupported versions are rejected.
 
 IBM Plex Mono regular and semibold Latin webfonts are bundled under `public/fonts`
 from [Google Fonts](https://fonts.google.com/specimen/IBM+Plex+Mono), including

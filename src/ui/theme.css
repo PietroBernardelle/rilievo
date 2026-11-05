@@ -271,3 +271,159 @@ input:focus-visible {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+.menu-container,
+.help-menu {
+  position: relative;
+}
+.menu-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 10;
+  min-width: 180px;
+  padding: 3px;
+  background: var(--color-panel);
+  white-space: nowrap;
+}
+.menu-popup button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  padding: 7px 10px;
+}
+.menu-popup button:not(:disabled):hover,
+.project-tree button:hover {
+  background: var(--color-bevel-light);
+}
+.help-menu summary {
+  list-style: none;
+  cursor: pointer;
+}
+.help-menu .menu-popup {
+  padding: 12px;
+  line-height: 1.8;
+}
+.tool-button[aria-pressed='true'] {
+  border-color: var(--color-bevel-dark) var(--color-bevel-light)
+    var(--color-bevel-light) var(--color-bevel-dark);
+  background: #a0a0a0;
+}
+.drawing-canvas {
+  cursor: crosshair;
+  touch-action: none;
+  outline: none;
+}
+.drawing-canvas.is-panning {
+  cursor: grabbing;
+}
+.room polygon,
+.draft polyline {
+  fill: none;
+  stroke: var(--color-wall);
+  stroke-width: 1;
+}
+.room.selected polygon {
+  stroke: var(--color-selected);
+}
+.corner,
+.draft rect {
+  fill: var(--color-drawing);
+  stroke: var(--color-wall);
+  stroke-width: 1;
+}
+.room.selected .corner {
+  stroke: var(--color-selected);
+}
+.room .selected-corner {
+  fill: var(--color-selected);
+}
+.room-label {
+  fill: var(--color-wall);
+  font-size: 12px;
+  pointer-events: none;
+}
+.room.selected .room-label {
+  fill: var(--color-selected);
+}
+.edge-labels {
+  fill: var(--color-dimension);
+  font-size: 11px;
+}
+.edge-labels text,
+.room-label {
+  paint-order: stroke;
+  stroke: var(--color-drawing);
+  stroke-width: 3px;
+  stroke-linejoin: miter;
+}
+.axis-labels {
+  fill: #6e9696;
+  font-size: 10px;
+}
+.snap-target {
+  fill: none;
+  stroke: var(--color-selected);
+  stroke-width: 1;
+}
+.project-tree {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 18px;
+}
+.project-tree button {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 5px 2px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.project-tree button[aria-current='true'] {
+  background: var(--color-bevel-light);
+}
+.properties-form {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+.properties-form input {
+  min-width: 0;
+  width: 100%;
+  background: white;
+  border: 2px solid;
+  border-color: var(--color-bevel-dark) var(--color-bevel-light)
+    var(--color-bevel-light) var(--color-bevel-dark);
+  padding: 4px;
+}
+.properties-form dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  margin: 12px 0 2px;
+  font-size: 11px;
+}
+.properties-form dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.property-note {
+  margin: 0;
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+.field-error {
+  margin: 0;
+  color: #800000;
+  font-size: 11px;
+}
+.command-line p {
+  flex: 1;
+  margin: 0;
+  font-size: 12px;
+}
+.coordinates {
+  min-width: 210px;
+}

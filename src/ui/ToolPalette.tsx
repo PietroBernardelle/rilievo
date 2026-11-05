@@ -1,3 +1,4 @@
+import type { Tool } from './editor';
 const TOOLS = [
   { label: 'Select', shortcut: 'V', path: 'M6 3v16l4-5 5 7 3-2-5-7h6Z' },
   { label: 'Rectangle', shortcut: 'R', path: 'M4 5h16v14H4Z' },
@@ -26,7 +27,13 @@ const TOOLS = [
   },
 ];
 
-export function ToolPalette() {
+export function ToolPalette({
+  tool,
+  onTool,
+}: {
+  tool: Tool;
+  onTool: (tool: Tool) => void;
+}) {
   return (
     <aside className="tool-palette" aria-label="Drawing tools">
       {TOOLS.map(({ label, shortcut, path }) => (
@@ -34,9 +41,11 @@ export function ToolPalette() {
           key={label}
           className="tool-button bevel"
           type="button"
-          disabled
+          disabled={!['V', 'R', 'P', 'Space'].includes(shortcut)}
+          aria-pressed={tool === shortcut}
+          onClick={() => onTool(shortcut as Tool)}
           aria-label={`${label} (${shortcut})`}
-          title={`${label} (${shortcut}) — coming in a later milestone`}
+          title={`${label} (${shortcut})${['V', 'R', 'P', 'Space'].includes(shortcut) ? '' : ' — coming in a later milestone'}`}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path d={path} />

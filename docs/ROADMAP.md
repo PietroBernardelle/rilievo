@@ -14,10 +14,18 @@ layout checks pass.
 
 ## M1: sketching
 
-- SVG drawing area with zoom, pan, grid and snap.
-- Rectangle and polygon tools create rooms; Select moves corners; Delete removes.
-- Rooms tree and properties panel (name, height).
-- Save/Open JSON, autosave, undo/redo.
+- [x] SVG drawing area with zoom, pan, grid and snap.
+- [x] Rectangle and polygon tools create rooms; Select moves corners; Delete removes.
+- [x] Rooms tree and properties panel (name, height).
+- [x] Save/Open JSON, autosave, undo/redo.
+
+M1 includes cursor-centred zoom, Space/middle-button pan, fit all, grid/corner/edge
+snapping with Shift override, and live three-decimal edge dimensions. New rooms
+start at 2.700 m; deleting a triangle's corner removes the room. Room quantities
+use sketch coordinates. File New/Open and all committed edits are undoable.
+Schema 1 is unchanged, including a lossless round-trip of the sample project.
+Model, history, snapping, and viewport tests pass. Browser checks cover drawing,
+properties, drag/delete, undo/redo, navigation, file handling, and autosave recovery.
 
 ## M2: solver (no UI)
 
