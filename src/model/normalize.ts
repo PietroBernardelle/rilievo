@@ -11,6 +11,11 @@ import type { Block, EdgeRef, PointRef, Project } from './types';
 export function normalizeBlock(block: Block): Block {
   const rounded = {
     ...block,
+    openings: block.openings.map((opening) => ({
+      ...opening,
+      offset: roundCoordinate(opening.offset),
+      width: roundCoordinate(opening.width),
+    })),
     vertices: block.vertices.map((vertex) => ({
       ...vertex,
       ...roundPoint(vertex),
@@ -75,6 +80,9 @@ export function normalizeBlock(block: Block): Block {
         ...opening,
         edge: edge([opening.roomId, opening.edge])[1],
         offset: roundCoordinate(length - opening.offset - opening.width),
+        ...(opening.hinge !== undefined
+          ? { hinge: opening.hinge === 0 ? (1 as const) : (0 as const) }
+          : {}),
       };
     }),
     constraints: rounded.constraints.map((constraint) => ({

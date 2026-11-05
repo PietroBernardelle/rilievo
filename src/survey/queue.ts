@@ -12,6 +12,39 @@ import { consistencyDiagnostics, roomRigidity } from '../solver/diagnostics';
 import type { RoomDiagnostics } from '../solver/diagnostics';
 import { pointRoom, resolvePoint } from '../solver/geometry';
 import { samePoints } from './points';
+import { ensureRoomDetails } from './openings';
+
+function _stage(block: Block, item: Measurement): number {
+  let roomId = pointRoom(block, item.a);
+  let phase = 0;
+  if (item.target?.type === 'join-thickness') {
+    const join = block.joins.find(
+      (join) =>
+        join.id ===
+        (item.target?.type === 'join-thickness' ? item.target.joinId : ''),
+    );
+    roomId = block.openings.find((opening) => opening.id === join?.via)?.roomId;
+    phase = 3;
+  } else if (item.target?.type === 'room-height') phase = 2;
+  else if (item.target || item.kind === 'height' || item.kind === 'offset')
+    phase = 1;
+  if (item.kind === 'offset') {
+    const jamb =
+      'jamb' in item.b
+        ? item.b.jamb
+        : 'jamb' in item.a
+          ? item.a.jamb
+          : undefined;
+    const join = block.joins.find((join) => join.pairedWith === jamb);
+    if (join) {
+      roomId = block.openings.find(
+        (opening) => opening.id === join.via,
+      )?.roomId;
+      phase = 3;
+    }
+  }
+  return block.rooms.findIndex((room) => room.id === roomId) * 4 + phase;
+}
 
 export type RoomStatus =
   'not rigid' | 'rigid but unchecked' | 'consistent' | 'inconsistent';
@@ -21,9 +54,7 @@ export function roomStatus(room: RoomDiagnostics): RoomStatus {
   return room.redundancy === 0 ? 'rigid but unchecked' : 'consistent';
 }
 export function surveyMeasurements(block: Block): Measurement[] {
-  return block.measurements.filter(
-    (item) => item.kind !== 'height' && item.status !== 'rejected',
-  );
+  return block.measurements.filter((item) => item.status !== 'rejected');
 }
 function _known(block: Block, a: PointRef, b: PointRef): boolean {
   return surveyMeasurements(block).some(
@@ -76,6 +107,11 @@ function _planned(block: Block): Block {
   };
 }
 export function ensureSurveyQueue(project: Project, blockId: string): Project {
+  const originalIds = new Set(
+    project.blocks
+      .find((item) => item.id === blockId)
+      ?.measurements.map((item) => item.id),
+  );
   let next = project;
   const getBlock = (): Block => {
     const block = next.blocks.find((item) => item.id === blockId);
@@ -130,8 +166,30 @@ export function ensureSurveyQueue(project: Project, blockId: string): Project {
         if (before.rigid || after.rank > before.rank) add(i, j);
       }
     }
+    next = ensureRoomDetails(next, blockId, room.id);
   }
-  return next;
+  if (next === project) return project;
+  const block = getBlock();
+  // Insert newly needed tasks in their room's phase without disturbing user reordering.
+  const measurements = block.measurements.filter((item) =>
+    originalIds.has(item.id),
+  );
+  for (const item of block.measurements.filter(
+    (item) => !originalIds.has(item.id),
+  )) {
+    const position = measurements.findIndex(
+      (other) =>
+        other.status !== 'rejected' &&
+        _stage(block, other) > _stage(block, item),
+    );
+    measurements.splice(position < 0 ? measurements.length : position, 0, item);
+  }
+  return {
+    ...next,
+    blocks: next.blocks.map((item) =>
+      item.id === blockId ? { ...block, measurements } : item,
+    ),
+  };
 }
 export function firstPending(block: Block, room?: Room): string | null {
   return (

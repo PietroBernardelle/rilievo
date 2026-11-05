@@ -9,6 +9,7 @@ import { sketchConstraints } from './constraints';
 import { contactResiduals, measuredRoomIds, sketchContacts } from './contacts';
 import { edgeEndpoints, pairedOpening, resolvePoint } from './geometry';
 import type { LeastSquaresProblem } from './lm';
+import { fittedWidthIds } from './observations';
 
 export const ANGLE_SIGMA = (2 * Math.PI) / 180;
 export const SKETCH_SIGMA = 1;
@@ -89,12 +90,15 @@ export function createFitProblem(block: Block): FitProblem {
     }
   });
   const coordinateCount = initial.length;
-  initial.push(...block.openings.map((opening) => opening.offset));
+  const fittedWidths = fittedWidthIds(block);
+  initial.push(
+    ...block.openings.flatMap((opening) => [opening.offset, opening.width]),
+  );
   const generatedConstraints = sketchConstraints(block);
   const constraints = [...block.constraints, ...generatedConstraints];
   const joins = block.joins.map((join) => ({
     join,
-    openings: pairedOpening(block, join.via, join.a, join.b),
+    openings: pairedOpening(block, join.via, join.a, join.b, join.pairedWith),
   }));
   function decode(x: number[]): Block {
     const vertices = initialBlock.vertices.map((vertex) => ({ ...vertex }));
@@ -106,7 +110,10 @@ export function createFitProblem(block: Block): FitProblem {
       vertices,
       openings: block.openings.map((opening, i) => ({
         ...opening,
-        offset: x[coordinateCount + i]!,
+        offset: x[coordinateCount + 2 * i]!,
+        width: fittedWidths.has(opening.id)
+          ? x[coordinateCount + 2 * i + 1]!
+          : opening.width,
       })),
     };
   }
@@ -117,7 +124,8 @@ export function createFitProblem(block: Block): FitProblem {
       if (
         measurement.status !== 'done' ||
         measurement.value === null ||
-        measurement.kind === 'height'
+        measurement.kind === 'height' ||
+        measurement.target
       )
         continue;
       residuals.push(
@@ -166,12 +174,14 @@ export function createFitProblem(block: Block): FitProblem {
     current.openings.forEach((opening, i) =>
       residuals.push(
         (opening.offset - block.openings[i]!.offset) / SKETCH_SIGMA,
+        (opening.width - block.openings[i]!.width) / SKETCH_SIGMA,
       ),
     );
     for (const {
       join,
       openings: [openingA, openingB],
     } of joins) {
+      const thickness = join.measured === false ? 0 : join.thickness;
       const [a, b] = edgeEndpoints(current, join.a);
       const [c, d] = edgeEndpoints(current, join.b);
       const lengthA = Math.max(1e-12, distance(a, b));
@@ -182,7 +192,7 @@ export function createFitProblem(block: Block): FitProblem {
       residuals.push((u.x + v.x) / ANGLE_SIGMA, (u.y + v.y) / ANGLE_SIGMA);
       const normal = { x: u.y, y: -u.x };
       residuals.push(
-        ((c.x - a.x) * normal.x + (c.y - a.y) * normal.y - join.thickness) /
+        ((c.x - a.x) * normal.x + (c.y - a.y) * normal.y - thickness) /
           JOIN_SIGMA,
       );
       for (const side of [0, 1] as const) {
@@ -192,8 +202,8 @@ export function createFitProblem(block: Block): FitProblem {
           side: side === 0 ? 1 : 0,
         });
         residuals.push(
-          (pb.x - pa.x - normal.x * join.thickness) / JOIN_SIGMA,
-          (pb.y - pa.y - normal.y * join.thickness) / JOIN_SIGMA,
+          (pb.x - pa.x - normal.x * thickness) / JOIN_SIGMA,
+          (pb.y - pa.y - normal.y * thickness) / JOIN_SIGMA,
         );
       }
     }
@@ -224,6 +234,7 @@ export function createFitProblem(block: Block): FitProblem {
     return current.openings.every(
       (opening) =>
         opening.offset >= 0 &&
+        opening.width >= 0.0001 &&
         opening.offset + opening.width <=
           distance(...edgeEndpoints(current, [opening.roomId, opening.edge])) +
             1e-8,

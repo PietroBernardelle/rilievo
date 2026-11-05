@@ -86,6 +86,14 @@ export function sketchContacts(block: Block): SketchContact[] {
     const a = block.rooms[i]!;
     for (let j = i + 1; j < block.rooms.length; j++) {
       const b = block.rooms[j]!;
+      if (
+        block.joins.some(
+          (join) =>
+            [join.a[0], join.b[0]].includes(a.id) &&
+            [join.a[0], join.b[0]].includes(b.id),
+        )
+      )
+        continue;
       if (measured.has(a.id) && measured.has(b.id)) continue;
       const matched = new Set<string>();
       for (const p of corners[i]!) {

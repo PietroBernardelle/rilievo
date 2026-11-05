@@ -1,4 +1,5 @@
 import { normalizeBlock } from './normalize';
+import { removeOpenings } from './openings';
 import {
   counterClockwise,
   roundPoint,
@@ -7,7 +8,7 @@ import {
 } from './geometry';
 import type { Block, EdgeRef, Point, PointRef, Project, Room } from './types';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 export function createProject(createdAt: string): Project {
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -187,6 +188,7 @@ function _removeGeometry(
   const removedOpenings = block.openings
     .filter((item) => affected([item.roomId, item.edge]))
     .map((item) => item.id);
+  block = removeOpenings(block, removedOpenings);
   const refAffected = (ref: PointRef): boolean =>
     'vertex' in ref
       ? removedVertices.includes(ref.vertex)

@@ -32,7 +32,13 @@ export interface Opening {
   width: number;
   height: number;
   sill: number;
+  hinge?: 0 | 1;
+  swing?: 'in' | 'out';
 }
+export type MeasurementTarget =
+  | { type: 'room-height'; roomId: string }
+  | { type: 'opening-height' | 'sill' | 'wall-thickness'; openingId: string }
+  | { type: 'join-thickness'; joinId: string };
 export interface Measurement {
   id: string;
   kind: 'distance' | 'height' | 'thickness' | 'offset';
@@ -42,6 +48,7 @@ export interface Measurement {
   sigma: number;
   status: 'queued' | 'done' | 'skipped' | 'rejected';
   note: string;
+  target?: MeasurementTarget;
 }
 export interface Constraint {
   kind: string;
@@ -55,6 +62,8 @@ export interface Join {
   b: EdgeRef;
   thickness: number;
   via: string;
+  pairedWith?: string;
+  measured?: boolean;
 }
 export interface Block {
   id: string;
@@ -77,7 +86,7 @@ export interface Link {
   b: { block: string; vertex: string };
 }
 export interface Project {
-  schemaVersion: 1;
+  schemaVersion: 2;
   name: string;
   units: 'm';
   createdAt: string;

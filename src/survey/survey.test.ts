@@ -60,6 +60,8 @@ function measureRoom(badWall = false): EditorState {
     '4000mm',
     '5',
     '5',
+    '2.7',
+    '2.7',
   ])
     state = submitMeasurement(state, value);
   return state;
@@ -71,19 +73,23 @@ describe('rule-based survey', () => {
       survey: null,
     };
     const state = startSurvey(source, 'b1');
-    expect(surveyMeasurements(surveyBlock(state)!)).toHaveLength(12);
+    expect(surveyMeasurements(surveyBlock(state)!)).toHaveLength(27);
     expect(currentMeasurement(state)?.id).toBe('m3');
     expect(surveyBlock(state)!.vertices.map((vertex) => vertex.sketch)).toEqual(
       source.project.blocks[0]!.vertices.map((vertex) => vertex.sketch),
     );
-    expect(source.project).toEqual(sample);
+    expect(source.project).toEqual(loadProject(JSON.stringify(sample)));
   });
   it('queues walls clockwise from A then both diagonals, without duplicating a resumed queue', () => {
     const source = initial();
     const state = startSurvey(source, 'b1');
     const block = surveyBlock(state)!;
     expect(source.project.blocks[0]!.measurements).toEqual([]);
-    expect(block.measurements.map((item) => [item.a, item.b])).toEqual([
+    expect(
+      block.measurements
+        .filter((item) => item.kind === 'distance')
+        .map((item) => [item.a, item.b]),
+    ).toEqual([
       [{ vertex: 'v1' }, { vertex: 'v4' }],
       [{ vertex: 'v4' }, { vertex: 'v3' }],
       [{ vertex: 'v3' }, { vertex: 'v2' }],
@@ -94,7 +100,7 @@ describe('rule-based survey', () => {
     expect(ensureSurveyQueue(state.project, 'b1')).toBe(state.project);
     expect(
       startSurvey(state, 'b1').project.blocks[0]!.measurements,
-    ).toHaveLength(6);
+    ).toHaveLength(8);
     expect(measurementPrompt(block, currentMeasurement(state)!)).toBe(
       'Measure ROOM 1: west wall, A → D',
     );
@@ -112,6 +118,9 @@ describe('rule-based survey', () => {
     expect(currentMeasurement(state)?.id).toBe('m6');
     state = submitMeasurement(state, '5');
     expect(roomStatus(status(state))).toBe('consistent');
+    expect(currentMeasurement(state)?.target?.type).toBe('room-height');
+    state = submitMeasurement(state, '2.7');
+    state = submitMeasurement(state, '2.7');
     expect(currentMeasurement(state)).toBeUndefined();
     expect(surveyBlock(state)!.vertices.map((vertex) => vertex.sketch)).toEqual(
       sketches,
@@ -141,7 +150,7 @@ describe('rule-based survey', () => {
     expect(
       surveyBlock(fixed)!.measurements.find((item) => item.id === 'm2'),
     ).toMatchObject({ value: 4.04, status: 'rejected' });
-    expect(surveyMeasurements(surveyBlock(fixed)!)).toHaveLength(6);
+    expect(surveyMeasurements(surveyBlock(fixed)!)).toHaveLength(8);
   });
   it('undoes and redoes a reading, geometry and queue cursor as one transaction', () => {
     const state = startSurvey(initial(), 'b1');
@@ -160,7 +169,7 @@ describe('rule-based survey', () => {
     let state = skipCurrent(first);
     expect(currentMeasurement(state)?.id).toBe('m2');
     expect(surveyBlock(state)!.measurements[0]!.status).toBe('skipped');
-    for (const value of ['4', '3', '4', '5', '5'])
+    for (const value of ['4', '3', '4', '5', '5', '2.7', '2.7'])
       state = submitMeasurement(state, value);
     expect(roomStatus(status(state))).toBe('rigid but unchecked');
     const restored = startSurvey(
@@ -186,7 +195,7 @@ describe('rule-based survey', () => {
     });
     const entered = submitMeasurement(alternative, '1.5');
     expect(
-      surveyBlock(entered)!.measurements.find((item) => item.id === 'm7')!
+      surveyBlock(entered)!.measurements.find((item) => item.id === 'm9')!
         .status,
     ).toBe('done');
     expect(undo(commit(createHistory(state), alternative)).present).toEqual(
@@ -204,8 +213,8 @@ describe('rule-based survey', () => {
       { vertex: 'v1' },
       { edgePoint: ['r1', 1], t: 0.5 },
     );
-    expect(currentMeasurement(custom)!.id).toBe('m7');
-    expect(surveyBlock(custom)!.measurements).toHaveLength(7);
+    expect(currentMeasurement(custom)!.id).toBe('m9');
+    expect(surveyBlock(custom)!.measurements).toHaveLength(9);
     expect(currentMeasurement(selectMeasurement(custom, 'm3'))!.id).toBe('m3');
     expect(() =>
       addCustomMeasurement(state, { vertex: 'v1' }, { vertex: 'v1' }),
@@ -229,7 +238,7 @@ describe('rule-based survey', () => {
       2.7,
     ).project;
     const survey = startSurvey(state, 'b1', 'r2');
-    expect(surveyBlock(survey)!.measurements).toHaveLength(12);
+    expect(surveyBlock(survey)!.measurements).toHaveLength(16);
     expect(currentMeasurement(survey)!.a).toEqual({ vertex: 'v5' });
   });
   it('adds independent, reachable diagonals for a concave room plus a check', () => {
@@ -247,10 +256,14 @@ describe('rule-based survey', () => {
       survey: null,
     };
     let state = startSurvey(source, 'b1');
-    expect(surveyBlock(state)!.measurements.length).toBe(10);
+    expect(surveyBlock(state)!.measurements.length).toBe(12);
     let count = 0;
     while (currentMeasurement(state) && count++ < 20) {
       const current = currentMeasurement(state)!;
+      if (current.kind === 'height') {
+        state = submitMeasurement(state, '2.7');
+        continue;
+      }
       if (!('vertex' in current.a) || !('vertex' in current.b))
         throw new Error('Expected corners.');
       const a = points[Number(current.a.vertex.slice(1)) - 1]!;
@@ -258,7 +271,7 @@ describe('rule-based survey', () => {
       expect(reachableDiagonal(points, a, b)).toBe(true);
       state = submitMeasurement(state, distance(a, b).toString());
     }
-    expect(count).toBe(10);
+    expect(count).toBe(12);
     expect(status(state)).toMatchObject({
       rigid: true,
       consistent: true,

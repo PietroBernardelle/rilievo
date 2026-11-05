@@ -106,7 +106,7 @@ describe('project editing', () => {
     const block = next.blocks[0]!;
     expect(block.rooms.map((room) => room.id)).toEqual(['r2']);
     expect(block.vertices).toHaveLength(4);
-    expect(block.openings.map((item) => item.id)).toEqual(['o2', 'o3']);
+    expect(block.openings.map((item) => item.id)).toEqual(['o2']);
     expect(block.joins).toEqual([]);
     expect(block.walls).toEqual([]);
     expect(block.constraints).toEqual([]);
@@ -283,9 +283,18 @@ describe('geometry and lengths', () => {
     },
   );
 });
-describe('schema 1 JSON', () => {
-  it('round-trips the supplied sample without losing fields or changing its data', () => {
-    expect(JSON.parse(saveProject(example()))).toEqual(sample);
+describe('JSON migration and round trips', () => {
+  it('migrates the supplied schema-1 sample and round-trips schema 2 without data loss', () => {
+    const migrated = example();
+    expect(migrated.schemaVersion).toBe(2);
+    expect(migrated.blocks[0]!.measurements).toEqual(
+      sample.blocks[0]!.measurements,
+    );
+    expect(migrated.blocks[0]!.joins[0]).toMatchObject({
+      pairedWith: 'o3',
+      measured: true,
+    });
+    expect(loadProject(saveProject(migrated))).toEqual(migrated);
   });
   it('round-trips an empty project and a sketch', () => {
     for (const project of [empty(), drawn()])
@@ -296,7 +305,7 @@ describe('schema 1 JSON', () => {
   });
   it('rejects unknown versions, bad coordinates, duplicates and broken references', () => {
     const invalid: unknown[] = [
-      { ...sample, schemaVersion: 2 },
+      { ...sample, schemaVersion: 3 },
       { ...sample, units: 'cm' },
       { ...sample, blocks: {} },
     ];

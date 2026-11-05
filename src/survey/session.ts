@@ -161,6 +161,10 @@ export function replaceBlockedPoint(
   const block = surveyBlock(state);
   if (!current || !block)
     throw new Error('Choose the blocked measurement first.');
+  if (current.target || current.kind === 'height')
+    throw new Error(
+      'Skip this height or thickness reading if it is inaccessible.',
+    );
   if (!('edgePoint' in point) || point.t <= 0 || point.t >= 1)
     throw new Error('Pick a point inside an edge.');
   const a = end === 'a' ? point : current.a;

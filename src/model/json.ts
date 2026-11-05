@@ -1,4 +1,5 @@
 import { normalizeProject } from './normalize';
+import { migrateProject } from './migrations';
 import { roomPoints, validatePolygon } from './geometry';
 import type { Block, PointRef, Project } from './types';
 
@@ -96,6 +97,11 @@ function _validateReferences(project: Project): void {
       edges.push(item.a, item.b);
       if (!block.openings.some((opening) => opening.id === item.via))
         throw new Error(`Join ${item.id} references a missing opening.`);
+      if (
+        item.pairedWith &&
+        !block.openings.some((opening) => opening.id === item.pairedWith)
+      )
+        throw new Error(`Join ${item.id} references a missing paired opening.`);
     }
     if (edges.some(([id, index]) => !_validEdge(block, id, index)))
       throw new Error(
@@ -110,6 +116,19 @@ function _validateReferences(project: Project): void {
       )
     )
       throw new Error('A measurement references a missing point.');
+    for (const measurement of block.measurements) {
+      if (measurement.status === 'rejected' || !measurement.target) continue;
+      const target = measurement.target;
+      if (
+        ('openingId' in target &&
+          !block.openings.some((item) => item.id === target.openingId)) ||
+        ('roomId' in target &&
+          !block.rooms.some((item) => item.id === target.roomId)) ||
+        ('joinId' in target &&
+          !block.joins.some((item) => item.id === target.joinId))
+      )
+        throw new Error('A measurement references a missing target.');
+    }
   }
   for (const link of project.links)
     for (const end of [link.a, link.b]) {
@@ -123,9 +142,9 @@ function _validateReferences(project: Project): void {
 }
 export function validateProject(value: unknown): asserts value is Project {
   const project = _object(value, 'Project');
-  if (project.schemaVersion !== 1)
+  if (project.schemaVersion !== 2)
     throw new Error(
-      `Unsupported schemaVersion ${String(project.schemaVersion)}. Expected 1.`,
+      `Unsupported schemaVersion ${String(project.schemaVersion)}. Expected 2.`,
     );
   _choice(project.units, ['m'], 'units');
   _text(project.name, 'name');
@@ -162,6 +181,10 @@ export function validateProject(value: unknown): asserts value is Project {
       _choice(opening.type, ['door', 'window', 'arch'], 'opening.type');
       for (const key of ['offset', 'width', 'height', 'sill'])
         _number(opening[key], `opening.${key}`, 0);
+      if (opening.hinge !== undefined)
+        _choice(opening.hinge, [0, 1], 'opening.hinge');
+      if (opening.swing !== undefined)
+        _choice(opening.swing, ['in', 'out'], 'opening.swing');
     }
     _objects(block.features, 'features');
     for (const measurement of _objects(block.measurements, 'measurements')) {
@@ -182,6 +205,36 @@ export function validateProject(value: unknown): asserts value is Project {
       _number(measurement.sigma, 'measurement.sigma', Number.MIN_VALUE);
       if (typeof measurement.note !== 'string')
         throw new Error('measurement.note must be text.');
+      if (measurement.target !== undefined) {
+        const target = _object(measurement.target, 'measurement.target');
+        _choice(
+          target.type,
+          [
+            'room-height',
+            'opening-height',
+            'sill',
+            'wall-thickness',
+            'join-thickness',
+          ],
+          'target.type',
+        );
+        const key =
+          target.type === 'room-height'
+            ? 'roomId'
+            : target.type === 'join-thickness'
+              ? 'joinId'
+              : 'openingId';
+        _text(target[key], `target.${key}`);
+        _choice(
+          measurement.kind,
+          [
+            target.type === 'wall-thickness' || target.type === 'join-thickness'
+              ? 'thickness'
+              : 'height',
+          ],
+          'target measurement kind',
+        );
+      }
     }
     for (const constraint of _objects(
       block.constraints,
@@ -201,6 +254,10 @@ export function validateProject(value: unknown): asserts value is Project {
       _edge(join.b, 'join.b');
       _number(join.thickness, 'join.thickness', 0);
       _text(join.via, 'join.via');
+      if (join.pairedWith !== undefined)
+        _text(join.pairedWith, 'join.pairedWith');
+      if (join.measured !== undefined)
+        _choice(join.measured, [true, false], 'join.measured');
     }
   }
   for (const link of _objects(project.links, 'links'))
@@ -218,6 +275,7 @@ export function loadProject(json: string): Project {
   } catch {
     throw new Error('This file is not valid JSON.');
   }
+  value = migrateProject(value);
   validateProject(value);
   const normalized = normalizeProject(value);
   validateProject(normalized);

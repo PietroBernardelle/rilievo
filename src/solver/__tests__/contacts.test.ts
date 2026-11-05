@@ -343,7 +343,7 @@ describe('M3.1 attached rooms', () => {
       expect(vertex.y).toBeCloseTo(original.y, 10);
     }
   });
-  it('propagates along a chain, retains the global frame, and redetects contacts after a schema-1 round trip', () => {
+  it('propagates along a chain, retains the global frame, and redetects contacts after a schema-2 round trip', () => {
     const block = rectangles([
       [0, 0, 5, 3],
       [5, 0, 2, 3],
@@ -375,7 +375,7 @@ describe('M3.1 attached rooms', () => {
       blocks: [result.block],
     };
     const restored = loadProject(saveProject(project));
-    expect(restored.schemaVersion).toBe(1);
+    expect(restored.schemaVersion).toBe(2);
     expect(Object.keys(restored.blocks[0]!).sort()).toEqual(
       Object.keys(block).sort(),
     );

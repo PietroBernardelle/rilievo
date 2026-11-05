@@ -1,5 +1,9 @@
 import { roomSubBlock, connectedRoomGroups } from './components';
-import { activeMeasurements, measurementJacobian } from './observations';
+import {
+  activeMeasurements,
+  fittedWidthIds,
+  measurementJacobian,
+} from './observations';
 import { chiSquareSurvival, measurementProjection } from './statistics';
 import { distance } from '../model/geometry';
 import type { Block, PointRef, Room } from '../model/types';
@@ -154,6 +158,7 @@ export function consistencyDiagnostics(
   return { residuals, rooms, groups };
 }
 export function roomRigidity(block: Block, room: Room): RoomRigidity {
+  const fittedWidths = fittedWidthIds(block);
   const vertices = room.vertexIds.map((id) =>
     block.vertices.find((vertex) => vertex.id === id)!,
   );
@@ -162,7 +167,7 @@ export function roomRigidity(block: Block, room: Room): RoomRigidity {
   );
   const initial = [
     ...vertices.flatMap((vertex) => [vertex.x, vertex.y]),
-    ...openings.map((opening) => opening.offset),
+    ...openings.flatMap((opening) => [opening.offset, opening.width]),
   ];
   const vertexColumns = vertices.length * 2;
   const measures = block.measurements.filter(
@@ -170,6 +175,7 @@ export function roomRigidity(block: Block, room: Room): RoomRigidity {
       item.status === 'done' &&
       item.value !== null &&
       item.kind !== 'height' &&
+      !item.target &&
       pointRoom(block, item.a) === room.id &&
       pointRoom(block, item.b) === room.id,
   );
@@ -181,7 +187,15 @@ export function roomRigidity(block: Block, room: Room): RoomRigidity {
       ]),
     );
     const offsets = new Map(
-      openings.map((opening, i) => [opening.id, x[vertexColumns + i]!]),
+      openings.map((opening, i) => [
+        opening.id,
+        {
+          offset: x[vertexColumns + 2 * i]!,
+          width: fittedWidths.has(opening.id)
+            ? x[vertexColumns + 2 * i + 1]!
+            : opening.width,
+        },
+      ]),
     );
     return {
       ...block,
@@ -191,7 +205,7 @@ export function roomRigidity(block: Block, room: Room): RoomRigidity {
       })),
       openings: block.openings.map((opening) => ({
         ...opening,
-        offset: offsets.get(opening.id) ?? opening.offset,
+        ...offsets.get(opening.id),
       })),
     };
   }

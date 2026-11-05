@@ -24,12 +24,28 @@ export function measurementRoom(
 }
 export function measurementLabel(
   block: Block,
-  item: Pick<Measurement, 'a' | 'b'>,
+  item: Pick<Measurement, 'a' | 'b'> &
+    Partial<Pick<Measurement, 'kind' | 'target'>>,
 ): string {
   const room = measurementRoom(block, item);
+  if (item.target) {
+    const target = item.target;
+    if (target.type === 'room-height')
+      return `${room?.name}: height at ${pointLabel(block, item.a)}`;
+    if (target.type === 'join-thickness')
+      return `${room?.name}: doorway wall thickness`;
+    const opening = block.openings.find(
+      (entry) => entry.id === target.openingId,
+    );
+    return `${room?.name}: ${opening?.type} ${opening?.id} ${target.type === 'opening-height' ? 'height' : target.type === 'sill' ? 'sill height' : 'wall thickness'}`;
+  }
+  if (item.kind === 'height')
+    return `${room?.name}: height at ${pointLabel(block, item.a)}`;
   return `${room?.name ?? 'Block'}: ${pointLabel(block, item.a)} → ${pointLabel(block, item.b)}`;
 }
 export function measurementPrompt(block: Block, item: Measurement): string {
+  if (item.target || item.kind === 'height')
+    return `Measure ${measurementLabel(block, item)}${item.kind === 'height' ? ' ↕' : ''}`;
   const room = measurementRoom(block, item);
   if (room && 'vertex' in item.a && 'vertex' in item.b) {
     const a = room.vertexIds.indexOf(item.a.vertex);

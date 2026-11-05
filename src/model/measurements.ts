@@ -1,4 +1,5 @@
 import { validateProject } from './json';
+import { applyScalarReading } from './heights';
 import type { Block, Measurement, PointRef, Project } from './types';
 
 export function measurementSigma(project: Project): number {
@@ -36,13 +37,14 @@ export function requestMeasurement(
   a: PointRef,
   b: PointRef,
   note = '',
+  options: Pick<Measurement, 'kind' | 'target'> = { kind: 'distance' },
 ): { project: Project; measurementId: string } {
-  if (JSON.stringify(a) === JSON.stringify(b))
+  if (!options.target && JSON.stringify(a) === JSON.stringify(b))
     throw new Error('Choose two different points.');
   const block = _block(project, blockId);
   const measurement: Measurement = {
     id: _id(project),
-    kind: 'distance',
+    ...options,
     a,
     b,
     value: null,
@@ -64,12 +66,21 @@ export function recordMeasurement(
   id: string,
   value: number,
 ): { project: Project; measurementId: string } {
-  if (!Number.isFinite(value) || value <= 0)
-    throw new Error('Measurement must be greater than zero.');
   const block = _block(project, blockId);
   const previous = block.measurements.find((item) => item.id === id);
   if (!previous || previous.status === 'rejected')
     throw new Error('Choose an active measurement.');
+  if (
+    !Number.isFinite(value) ||
+    (previous.target?.type === 'sill' || previous.kind === 'offset'
+      ? value < 0
+      : value <= 0)
+  )
+    throw new Error(
+      previous.target?.type === 'sill'
+        ? 'Sill cannot be negative.'
+        : 'Measurement must be greater than zero.',
+    );
   const fresh = previous.status !== 'queued' || previous.value !== null;
   const measurement: Measurement = {
     ...previous,
@@ -86,7 +97,10 @@ export function recordMeasurement(
         : [measurement],
   );
   return {
-    project: _replace(project, { ...block, measurements }),
+    project: _replace(
+      project,
+      applyScalarReading({ ...block, measurements }, measurement),
+    ),
     measurementId: measurement.id,
   };
 }
