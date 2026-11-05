@@ -1,0 +1,30 @@
+# Solver test cases
+
+Lengths in metres. Tolerance for "equals": 1 mm unless stated. Each case becomes a Vitest test in `src/solver/__tests__/`.
+
+## 1. Square room is square
+Sketch: rectangle, roughly 4 × 3. Measurements: AB 4.000, BC 3.000, CD 4.000, DA 3.000, AC 5.000.
+Expect: all angles 90° ± 0.05°; BD fitted = 5.000; every residual < 1 mm; room rigid.
+
+## 2. Not square (parallelogram)
+Sketch: rectangle, roughly 4 × 3. Measurements: AB 4.000, BC 3.000, CD 4.000, DA 3.000, AC 5.100.
+Expect: angle at B ≈ 92.41° (law of cosines: cos B = (16 + 9 − 26.01) / 24); predicted BD ≈ 4.898; residuals < 1 mm. The soft right-angle prior must not pull it back to 90°.
+
+## 3. Inconsistent measurement is flagged
+As case 1, plus BD 5.300.
+Expect: the fit can't satisfy all of them; the largest normalised residual is on BD or AC; at least one is flagged (> 15 mm); leave-one-out without BD gives all residuals < 1 mm.
+
+## 4. Not rigid yet
+Sketch: rectangle. Measurements: AB, BC, CD, DA only.
+Expect: room reported not rigid (missing 1 diagonal); the fit still converges (the angle prior holds the shape); the next suggested measurement is a diagonal.
+
+## 5. L-shaped room (6 corners)
+Sketch: L made of a 5 × 4 box minus a 2 × 2 corner. Measurements: the 6 walls (5, 2, 2, 2, 3, 4 going round) plus diagonals until rigid (2·6 − 3 = 9 distances).
+Expect: rigid after 9 independent distances; shape matches within 1 mm.
+
+## 6. Two rooms joined through a doorway
+Rooms A (4 × 3) and B (3 × 3) share a wall 0.30 thick. Doorway: in A, the jamb is 0.80 from A's corner; in B, the same jamb is 0.50 from B's corner.
+Expect: B is placed parallel to A, 0.30 away, shifted so the jambs line up; the total outside length along that side = 4 + 0.30 + 3 = 7.30 if the rooms are in a row.
+
+## 7. Italian number input
+Parsing: `3,425` → 3.425; `342.5cm` → 3.425; `3425mm` → 3.425; `3.4.2` → error.

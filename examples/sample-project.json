@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "name": "Esempio: due stanze",
+  "units": "m",
+  "createdAt": "2026-11-05T10:00:00Z",
+  "settings": { "tolerance": 0.015, "laserSigma": 0.002, "placementSigma": 0.005 },
+  "blocks": [
+    {
+      "id": "b1",
+      "name": "Piano terra",
+      "kind": "floor",
+      "elevation": 0,
+      "placement": { "x": 0, "y": 0, "rotation": 0 },
+      "vertices": [
+        { "id": "v1", "x": 0, "y": 0, "sketch": { "x": 0, "y": 0 } },
+        { "id": "v2", "x": 4.1, "y": 0, "sketch": { "x": 4.1, "y": 0 } },
+        { "id": "v3", "x": 4.1, "y": 2.9, "sketch": { "x": 4.1, "y": 2.9 } },
+        { "id": "v4", "x": 0, "y": 2.9, "sketch": { "x": 0, "y": 2.9 } },
+        { "id": "v5", "x": 4.4, "y": 0, "sketch": { "x": 4.4, "y": 0 } },
+        { "id": "v6", "x": 7.4, "y": 0, "sketch": { "x": 7.4, "y": 0 } },
+        { "id": "v7", "x": 7.4, "y": 3.1, "sketch": { "x": 7.4, "y": 3.1 } },
+        { "id": "v8", "x": 4.4, "y": 3.1, "sketch": { "x": 4.4, "y": 3.1 } }
+      ],
+      "rooms": [
+        { "id": "r1", "name": "Cucina", "vertexIds": ["v1", "v2", "v3", "v4"], "height": 2.95 },
+        { "id": "r2", "name": "Sala", "vertexIds": ["v5", "v6", "v7", "v8"], "height": 2.95 }
+      ],
+      "walls": [{ "roomId": "r1", "edge": 1, "thickness": 0.3, "exterior": false }],
+      "openings": [
+        { "id": "o1", "roomId": "r1", "edge": 1, "type": "door", "offset": 0.8, "width": 0.8, "height": 2.1, "sill": 0 },
+        { "id": "o2", "roomId": "r2", "edge": 2, "type": "window", "offset": 1.0, "width": 1.2, "height": 1.4, "sill": 0.9 }
+      ],
+      "features": [],
+      "measurements": [
+        { "id": "m1", "kind": "distance", "a": { "vertex": "v1" }, "b": { "vertex": "v2" }, "value": 4.0, "sigma": 0.005, "status": "done", "note": "" },
+        { "id": "m2", "kind": "distance", "a": { "vertex": "v2" }, "b": { "vertex": "v3" }, "value": 3.0, "sigma": 0.005, "status": "done", "note": "" },
+        { "id": "m3", "kind": "distance", "a": { "vertex": "v3" }, "b": { "vertex": "v4" }, "value": null, "sigma": 0.005, "status": "queued", "note": "" }
+      ],
+      "constraints": [],
+      "joins": [{ "id": "j1", "a": ["r1", 1], "b": ["r2", 3], "thickness": 0.3, "via": "o1" }]
+    }
+  ],
+  "links": []
+}
