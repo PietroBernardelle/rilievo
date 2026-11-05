@@ -53,14 +53,17 @@ describe('documented solver cases', () => {
       Math.abs(distance(points[1]!, points[3]!) - Math.sqrt(23.99)),
     ).toBeLessThan(0.001);
   });
-  it('3. inconsistent diagonals are flagged and leaving out BD repairs the fit', () => {
+  it('3. inconsistent diagonals are detected but not uniquely localised', () => {
     const input = squareBlock();
     input.measurements.push(
       measurement('BD', { vertex: 'v2' }, { vertex: 'v4' }, 5.3),
     );
     const result = fit(input);
     expect(result.converged).toBe(true);
-    expect(['AC', 'BD']).toContain(result.worstMeasurementId);
+    expect(result.rooms[0]!.consistent).toBe(false);
+    expect(result.suspectMeasurements.map((item) => item.id)).toContain('BD');
+    expect(result.probableWrongMeasurementId).toBeNull();
+    expect(result.worstMeasurementId).toBeNull();
     expect(
       result.residuals.some(
         (item) => item.flagged && Math.abs(item.residual) > 0.015,

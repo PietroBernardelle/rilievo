@@ -2,11 +2,17 @@ import { roomPoints, signedArea } from '../model/geometry';
 import { validateProject } from '../model/json';
 import { createProject } from '../model/project';
 import type { Block, Constraint } from '../model/types';
-import { measurementResiduals, roomRigidity } from './diagnostics';
-import type { MeasurementResidual, RoomRigidity } from './diagnostics';
-import { levenbergMarquardt } from './lm';
+import { consistencyDiagnostics } from './diagnostics';
+import type {
+  MeasurementResidual,
+  RoomDiagnostics,
+  GroupDiagnostics,
+  MeasurementSuspect,
+} from './diagnostics';
+import { roomSubBlock } from './components';
+import { activeMeasurements } from './observations';
+import { solveGeometry } from './solve';
 import { squaredNorm } from './linear';
-import { createFitProblem } from './problem';
 
 export const DEFAULT_TOLERANCE = 0.015;
 export const DEFAULT_MAX_ITERATIONS = 120;
@@ -17,7 +23,10 @@ export interface FitOptions {
 export interface FitResult {
   block: Block;
   residuals: MeasurementResidual[];
-  rooms: RoomRigidity[];
+  rooms: RoomDiagnostics[];
+  groups: GroupDiagnostics[];
+  suspectMeasurements: MeasurementSuspect[];
+  probableWrongMeasurementId: string | null;
   rms: number;
   worstMeasurementId: string | null;
   generatedConstraints: Constraint[];
@@ -26,7 +35,10 @@ export interface FitResult {
   converged: boolean;
   hardError: number;
 }
-export function fit(block: Block, options: FitOptions = {}): FitResult {
+function _validate(
+  block: Block,
+  options: FitOptions,
+): { tolerance: number; maxIterations: number } {
   const tolerance = options.tolerance ?? DEFAULT_TOLERANCE;
   const maxIterations = options.maxIterations ?? DEFAULT_MAX_ITERATIONS;
   if (
@@ -59,44 +71,74 @@ export function fit(block: Block, options: FitOptions = {}): FitResult {
     (block.vertices.length || block.openings.length || block.joins.length)
   )
     throw new Error('A fit with geometry requires at least one room.');
-  let fitted = block;
-  let iterations = 0;
-  let converged = true;
-  let hardError = 0;
-  let generatedConstraints: Constraint[] = [];
-  if (block.rooms.length) {
-    const problem = createFitProblem(block);
-    const optimized = levenbergMarquardt(
-      problem,
-      problem.initial,
+  return { tolerance, maxIterations };
+}
+export function fit(block: Block, options: FitOptions = {}): FitResult {
+  const { tolerance, maxIterations } = _validate(block, options);
+  const geometry = solveGeometry(block, maxIterations);
+  const diagnostics = consistencyDiagnostics(geometry.block, tolerance);
+  const badGroups = diagnostics.groups.filter(
+    (group) =>
+      !group.consistent ||
+      diagnostics.rooms.some(
+        (room) => group.roomIds.includes(room.roomId) && !room.consistent,
+      ),
+  );
+  for (const group of badGroups) {
+    // With only one closure condition, removing a checked row destroys the check.
+    if (!geometry.converged || group.redundancy <= 1) continue;
+    const trials = _leaveOneOut(
+      roomSubBlock(block, group.roomIds),
+      tolerance,
       maxIterations,
     );
-    fitted = problem.decode(optimized.x);
-    iterations = optimized.iterations;
-    converged = optimized.converged;
-    hardError = optimized.hardError;
-    generatedConstraints = problem.generatedConstraints;
+    const compatible = trials.filter((trial) => trial.consistent);
+    if (
+      compatible.length !== 1 ||
+      !trials.every((trial) => trial.converged) ||
+      compatible[0]!.redundancy <= 0
+    )
+      continue;
+    group.probableWrongMeasurementId = compatible[0]!.omittedId;
+    for (const room of diagnostics.rooms)
+      if (
+        group.roomIds.includes(room.roomId) &&
+        room.suspectMeasurements.some(
+          (item) => item.id === compatible[0]!.omittedId,
+        )
+      )
+        room.probableWrongMeasurementId = compatible[0]!.omittedId;
   }
-  const residuals = measurementResiduals(fitted, tolerance);
-  const worst = residuals.reduce<MeasurementResidual | null>(
-    (best, item) =>
-      !best || Math.abs(item.normalized) > Math.abs(best.normalized)
-        ? item
-        : best,
-    null,
+  const suspects = new Map<string, MeasurementSuspect>();
+  for (const scope of [...diagnostics.rooms, ...diagnostics.groups])
+    for (const item of scope.suspectMeasurements) {
+      const previous = suspects.get(item.id);
+      if (
+        !previous ||
+        Math.abs(item.standardizedResidual) >
+          Math.abs(previous.standardizedResidual)
+      )
+        suspects.set(item.id, item);
+    }
+  const suspectMeasurements = [...suspects.values()].sort(
+    (a, b) =>
+      Math.abs(b.standardizedResidual) - Math.abs(a.standardizedResidual),
   );
+  const probableWrongMeasurementId =
+    badGroups.length === 1 ? badGroups[0]!.probableWrongMeasurementId : null;
   return {
-    block: fitted,
-    residuals,
-    rooms: fitted.rooms.map((room) => roomRigidity(fitted, room)),
-    rms: residuals.length
+    ...geometry,
+    ...diagnostics,
+    suspectMeasurements,
+    probableWrongMeasurementId,
+    // Compatibility alias; it no longer turns the largest residual into an accusation.
+    worstMeasurementId: probableWrongMeasurementId,
+    rms: diagnostics.residuals.length
       ? Math.sqrt(
-          squaredNorm(residuals.map((item) => item.normalized)) /
-            residuals.length,
+          squaredNorm(diagnostics.residuals.map((item) => item.normalized)) /
+            diagnostics.residuals.length,
         )
       : 0,
-    worstMeasurementId: worst?.id ?? null,
-    generatedConstraints,
     deferredMeasurementIds: block.measurements
       .filter(
         (item) =>
@@ -105,9 +147,6 @@ export function fit(block: Block, options: FitOptions = {}): FitResult {
           item.value !== null,
       )
       .map((item) => item.id),
-    iterations,
-    converged,
-    hardError,
   };
 }
 export interface LeaveOneOutResult {
@@ -115,35 +154,55 @@ export interface LeaveOneOutResult {
   rms: number;
   maxResidual: number;
   converged: boolean;
+  consistent: boolean;
+  redundancy: number;
+}
+function _leaveOneOut(
+  block: Block,
+  tolerance: number,
+  maxIterations: number,
+): LeaveOneOutResult[] {
+  return activeMeasurements(block)
+    .map((measurement) => {
+      const omitted = {
+        ...block,
+        measurements: block.measurements.map((item) =>
+          item.id === measurement.id
+            ? { ...item, status: 'rejected' as const }
+            : item,
+        ),
+      };
+      const geometry = solveGeometry(omitted, maxIterations);
+      const diagnostics = consistencyDiagnostics(geometry.block, tolerance);
+      return {
+        omittedId: measurement.id,
+        rms: diagnostics.residuals.length
+          ? Math.sqrt(
+              squaredNorm(
+                diagnostics.residuals.map((item) => item.normalized),
+              ) / diagnostics.residuals.length,
+            )
+          : 0,
+        maxResidual: Math.max(
+          0,
+          ...diagnostics.residuals.map((item) => Math.abs(item.residual)),
+        ),
+        converged: geometry.converged,
+        consistent:
+          diagnostics.rooms.every((room) => room.consistent) &&
+          diagnostics.groups.every((group) => group.consistent),
+        redundancy: diagnostics.groups.reduce(
+          (sum, group) => sum + group.redundancy,
+          0,
+        ),
+      };
+    })
+    .sort((a, b) => a.rms - b.rms);
 }
 export function leaveOneOut(
   block: Block,
   options: FitOptions = {},
 ): LeaveOneOutResult[] {
-  return block.measurements
-    .filter(
-      (item) =>
-        item.status === 'done' && item.value !== null && item.kind !== 'height',
-    )
-    .map((measurement) => {
-      const result = fit(
-        {
-          ...block,
-          measurements: block.measurements.map((item) =>
-            item.id === measurement.id ? { ...item, status: 'rejected' } : item,
-          ),
-        },
-        options,
-      );
-      return {
-        omittedId: measurement.id,
-        rms: result.rms,
-        maxResidual: Math.max(
-          0,
-          ...result.residuals.map((item) => Math.abs(item.residual)),
-        ),
-        converged: result.converged,
-      };
-    })
-    .sort((a, b) => a.rms - b.rms);
+  const { tolerance, maxIterations } = _validate(block, options);
+  return _leaveOneOut(block, tolerance, maxIterations);
 }

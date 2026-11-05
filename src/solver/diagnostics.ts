@@ -1,3 +1,6 @@
+import { roomSubBlock, connectedRoomGroups } from './components';
+import { activeMeasurements, measurementJacobian } from './observations';
+import { chiSquareSurvival, measurementProjection } from './statistics';
 import { distance } from '../model/geometry';
 import type { Block, PointRef, Room } from '../model/types';
 import { pointRoom, resolvePoint } from './geometry';
@@ -12,6 +15,9 @@ export interface MeasurementResidual {
   normalized: number;
   sigma: number;
   flagged: boolean;
+  redundancy: number;
+  standardizedResidual: number | null;
+  unchecked: boolean;
 }
 export interface RoomRigidity {
   roomId: string;
@@ -20,33 +26,132 @@ export interface RoomRigidity {
   rigid: boolean;
   nextMeasurement: { a: PointRef; b: PointRef } | null;
 }
+export const CONSISTENCY_SIGNIFICANCE = 0.01;
+export const REDUNDANCY_EPSILON = 1e-6;
+export interface MeasurementSuspect {
+  id: string;
+  standardizedResidual: number;
+  redundancy: number;
+}
+export interface ConsistencyTest {
+  measurementCount: number;
+  parameterRank: number;
+  redundancy: number;
+  chiSquare: number;
+  pValue: number | null;
+  consistent: boolean;
+  suspectMeasurements: MeasurementSuspect[];
+  probableWrongMeasurementId: string | null;
+}
+export interface RoomDiagnostics extends RoomRigidity, ConsistencyTest {}
+export interface GroupDiagnostics extends ConsistencyTest {
+  roomIds: string[];
+}
 export function measurementResiduals(
   block: Block,
   tolerance: number,
 ): MeasurementResidual[] {
-  return block.measurements
-    .filter(
-      (item) =>
-        item.status === 'done' && item.value !== null && item.kind !== 'height',
-    )
-    .map((measurement) => {
-      const fitted = distance(
-        resolvePoint(block, measurement.a),
-        resolvePoint(block, measurement.b),
+  const measurements = activeMeasurements(block);
+  const projection = measurementProjection(
+    measurementJacobian(block, measurements),
+  );
+  return measurements.map((measurement, i) => {
+    const fitted = distance(
+      resolvePoint(block, measurement.a),
+      resolvePoint(block, measurement.b),
+    );
+    const residual = fitted - measurement.value!;
+    const redundancy =
+      projection.redundancy[i]! < REDUNDANCY_EPSILON
+        ? 0
+        : projection.redundancy[i]!;
+    return {
+      id: measurement.id,
+      measured: measurement.value!,
+      fitted,
+      residual,
+      normalized: residual / measurement.sigma,
+      sigma: measurement.sigma,
+      flagged:
+        Math.abs(residual) > tolerance ||
+        Math.abs(residual) > 3 * measurement.sigma,
+      redundancy,
+      standardizedResidual:
+        redundancy === 0
+          ? null
+          : residual / (measurement.sigma * Math.sqrt(redundancy)),
+      unchecked: redundancy === 0,
+    };
+  });
+}
+export function consistencyTest(
+  residuals: MeasurementResidual[],
+): ConsistencyTest {
+  const count = residuals.length;
+  // trace(I - H) equals m - rank(J), including rank-deficient/opening problems.
+  const redundancy = Math.round(
+    residuals.reduce((sum, item) => sum + item.redundancy, 0),
+  );
+  const chiSquare = residuals.reduce(
+    (sum, item) => sum + item.normalized ** 2,
+    0,
+  );
+  const pValue =
+    redundancy > 0 ? chiSquareSurvival(chiSquare, redundancy) : null;
+  const consistent = pValue === null || pValue >= CONSISTENCY_SIGNIFICANCE;
+  const suspectMeasurements: MeasurementSuspect[] = consistent
+    ? []
+    : residuals.flatMap((item) =>
+        item.standardizedResidual === null
+          ? []
+          : [
+              {
+                id: item.id,
+                standardizedResidual: item.standardizedResidual,
+                redundancy: item.redundancy,
+              },
+            ],
       );
-      const residual = fitted - measurement.value!;
-      return {
-        id: measurement.id,
-        measured: measurement.value!,
-        fitted,
-        residual,
-        normalized: residual / measurement.sigma,
-        sigma: measurement.sigma,
-        flagged:
-          Math.abs(residual) > tolerance ||
-          Math.abs(residual) > 3 * measurement.sigma,
-      };
-    });
+  suspectMeasurements.sort(
+    (a, b) =>
+      Math.abs(b.standardizedResidual) - Math.abs(a.standardizedResidual),
+  );
+  return {
+    measurementCount: count,
+    parameterRank: count - redundancy,
+    redundancy,
+    chiSquare,
+    pValue,
+    consistent,
+    suspectMeasurements,
+    probableWrongMeasurementId: null,
+  };
+}
+export function consistencyDiagnostics(
+  block: Block,
+  tolerance: number,
+): {
+  residuals: MeasurementResidual[];
+  rooms: RoomDiagnostics[];
+  groups: GroupDiagnostics[];
+} {
+  const residuals: MeasurementResidual[] = [];
+  const groups = connectedRoomGroups(block).map((roomIds) => {
+    const local = measurementResiduals(roomSubBlock(block, roomIds), tolerance);
+    residuals.push(...local);
+    return { roomIds, ...consistencyTest(local) };
+  });
+  const rooms = block.rooms.map((room) => ({
+    ...roomRigidity(block, room),
+    ...consistencyTest(
+      measurementResiduals(roomSubBlock(block, [room.id]), tolerance),
+    ),
+  }));
+  const order = new Map(
+    block.measurements.map((measurement, i) => [measurement.id, i]),
+  );
+  residuals.sort((a, b) => order.get(a.id)! - order.get(b.id)!);
+  return { residuals, rooms, groups };
 }
 export function roomRigidity(block: Block, room: Room): RoomRigidity {
   const vertices = room.vertexIds.map((id) =>
@@ -104,7 +209,7 @@ export function roomRigidity(block: Block, room: Room): RoomRigidity {
   const rank = constraintsOnVertices(jacobian);
   const required = 2 * vertices.length - 3;
   let nextMeasurement: RoomRigidity['nextMeasurement'] = null;
-  if (rank < required) {
+  if (rank < required || measures.length === matrixRank(jacobian)) {
     const pairs: [number, number][] = [];
     for (let i = 0; i < vertices.length; i++)
       pairs.push([i, (i + 1) % vertices.length]);
@@ -129,7 +234,10 @@ export function roomRigidity(block: Block, room: Room): RoomRigidity {
         ],
         initial,
       )[0]!;
-      if (constraintsOnVertices([...jacobian, row]) > rank) {
+      if (
+        rank >= required ||
+        constraintsOnVertices([...jacobian, row]) > rank
+      ) {
         nextMeasurement = { a: { vertex: a }, b: { vertex: b } };
         break;
       }
