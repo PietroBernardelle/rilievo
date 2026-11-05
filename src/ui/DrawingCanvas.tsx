@@ -1,3 +1,4 @@
+import { edgeLabels } from '../tools/labels';
 import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { containsPoint, distance, roomPoints } from '../model/geometry';
@@ -42,21 +43,17 @@ function EdgeLabels({
 }) {
   return (
     <g className="edge-labels" pointerEvents="none">
-      {points.slice(0, closed ? undefined : -1).map((a, i) => {
-        const b = points[(i + 1) % points.length]!;
-        const start = toScreen(a, view);
-        const end = toScreen(b, view);
-        return (
-          <text
-            key={i}
-            x={(start.x + end.x) / 2}
-            y={(start.y + end.y) / 2 - 9}
-            textAnchor="middle"
-          >
-            {distance(a, b).toFixed(3)}
-          </text>
-        );
-      })}
+      {edgeLabels(points, view, closed).map((label, i) => (
+        <text
+          key={i}
+          x={label.point.x}
+          y={label.point.y}
+          textAnchor="middle"
+          dominantBaseline="central"
+        >
+          {label.text}
+        </text>
+      ))}
     </g>
   );
 }
@@ -99,16 +96,26 @@ function Grid({
       </defs>
       <rect width="100%" height="100%" fill="url(#drawing-grid)" />
       <g className="axis-labels">
-        {xs.map((x) => (
-          <text key={x} x={toScreen({ x, y: 0 }, view).x + 3} y={height - 6}>
-            {Math.abs(x) < 1e-9 ? '0.000' : x.toFixed(3)}
-          </text>
-        ))}
-        {ys.map((y) => (
-          <text key={y} x="5" y={toScreen({ x: 0, y }, view).y - 4}>
-            {Math.abs(y) < 1e-9 ? '0.000' : y.toFixed(3)}
-          </text>
-        ))}
+        {xs
+          .filter((x) => {
+            const pixel = toScreen({ x, y: 0 }, view).x;
+            return pixel >= 72 && pixel <= width - 48;
+          })
+          .map((x) => (
+            <text key={x} x={toScreen({ x, y: 0 }, view).x + 3} y={height - 6}>
+              {Math.abs(x) < 1e-9 ? '0.000' : x.toFixed(3)}
+            </text>
+          ))}
+        {ys
+          .filter((y) => {
+            const pixel = toScreen({ x: 0, y }, view).y;
+            return pixel >= 16 && pixel <= height - 26;
+          })
+          .map((y) => (
+            <text key={y} x="5" y={toScreen({ x: 0, y }, view).y - 4}>
+              {Math.abs(y) < 1e-9 ? '0.000' : y.toFixed(3)}
+            </text>
+          ))}
       </g>
     </g>
   );

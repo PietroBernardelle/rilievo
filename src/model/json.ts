@@ -1,3 +1,4 @@
+import { normalizeProject } from './normalize';
 import { roomPoints, validatePolygon } from './geometry';
 import type { Block, PointRef, Project } from './types';
 
@@ -218,9 +219,13 @@ export function loadProject(json: string): Project {
     throw new Error('This file is not valid JSON.');
   }
   validateProject(value);
-  return value;
+  const normalized = normalizeProject(value);
+  validateProject(normalized);
+  return normalized;
 }
 export function saveProject(project: Project): string {
   validateProject(project);
-  return JSON.stringify(project, null, 2) + '\n';
+  const normalized = normalizeProject(project);
+  validateProject(normalized);
+  return JSON.stringify(normalized, null, 2) + '\n';
 }

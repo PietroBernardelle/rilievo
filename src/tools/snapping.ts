@@ -1,4 +1,9 @@
-import { distance, nearestOnSegment, roomPoints } from '../model/geometry';
+import {
+  distance,
+  nearestOnSegment,
+  roundPoint,
+  roomPoints,
+} from '../model/geometry';
 import type { Block, Point } from '../model/types';
 export const GRID_STEP = 0.1;
 export const SNAP_RADIUS = 10;
@@ -30,7 +35,7 @@ export function snapPoint(
       best = corner;
     }
   }
-  if (best) return { point: { x: best.x, y: best.y }, kind: 'corner' };
+  if (best) return { point: roundPoint(best), kind: 'corner' };
   for (const room of block?.rooms ?? []) {
     const points = roomPoints(block!, room, false);
     for (let i = 0; i < points.length; i++) {
@@ -51,12 +56,12 @@ export function snapPoint(
       }
     }
   }
-  if (best) return { point: best, kind: 'edge' };
+  if (best) return { point: roundPoint(best), kind: 'edge' };
   return {
-    point: {
+    point: roundPoint({
       x: Math.round(point.x / GRID_STEP) * GRID_STEP,
       y: Math.round(point.y / GRID_STEP) * GRID_STEP,
-    },
+    }),
     kind: 'grid',
   };
 }

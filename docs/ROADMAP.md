@@ -27,6 +27,13 @@ Schema 1 is unchanged, including a lossless round-trip of the sample project.
 Model, history, snapping, and viewport tests pass. Browser checks cover drawing,
 properties, drag/delete, undo/redo, navigation, file handling, and autosave recovery.
 
+## M1.1: geometry conventions and labels
+
+- [x] Normalise room winding to CCW, preserving edge-based references.
+- [x] Round snapped and stored corner coordinates to 0.0001 m.
+- [x] Place dimensions outside rooms and hide labels on short screen edges.
+- [x] Reserve separate space for the left and bottom axis labels.
+
 ## M2: solver (no UI)
 
 - `fit(block)`: Levenberg–Marquardt as in `SOLVER.md`, constraints generated from the sketch (right angles where the sketch is within 5° of 90°).

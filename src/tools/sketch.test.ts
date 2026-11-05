@@ -1,3 +1,4 @@
+import { edgeLabels } from './labels';
 import { describe, expect, it } from 'vitest';
 import { createProject, createRoom } from '../model/project';
 import { rectanglePoints, snapPoint } from './snapping';
@@ -71,5 +72,30 @@ describe('viewport', () => {
     expect(fitView([], 800, 600).y).toBe(520);
     for (const scale of [0.1, 1, 20, 80, 2000])
       expect(labelStep(scale) * scale).toBeGreaterThanOrEqual(90);
+  });
+});
+
+describe('precision and dimension labels', () => {
+  it('rounds grid and edge snap targets', () => {
+    expect(
+      snapPoint({ x: 2.31, y: 1.21 }, undefined, 80, false)!.point,
+    ).toEqual({ x: 2.3, y: 1.2 });
+    expect(
+      snapPoint({ x: 1.234567, y: 0.01 }, block, 80, false)!.point,
+    ).toEqual({ x: 1.2346, y: 0 });
+  });
+  it('places every label outside the polygon for either winding and hides short edges', () => {
+    const points = rectanglePoints({ x: 0, y: 0 }, { x: 4, y: 3 });
+    for (const polygon of [points, [...points].reverse()]) {
+      const labels = edgeLabels(polygon, INITIAL_VIEW);
+      expect(labels).toHaveLength(4);
+      for (const label of labels) {
+        const p = toWorld(label.point, INITIAL_VIEW);
+        expect(p.x < 0 || p.x > 4 || p.y < 0 || p.y > 3).toBe(true);
+      }
+    }
+    expect(edgeLabels(points, { x: 0, y: 0, scale: 5 })).toEqual([]);
+    expect(edgeLabels(points.slice(0, 2), INITIAL_VIEW, false)).toHaveLength(1);
+    expect(edgeLabels([], INITIAL_VIEW)).toEqual([]);
   });
 });

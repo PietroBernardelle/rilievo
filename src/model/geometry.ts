@@ -11,22 +11,37 @@ export function roomPoints(block: Block, room: Room, sketch = true): Point[] {
     return sketch ? vertex.sketch : vertex;
   });
 }
-export function area(points: Point[]): number {
+export const COORDINATE_DECIMALS = 4;
+export function roundCoordinate(value: number): number {
+  if (!Number.isFinite(value))
+    throw new Error('Coordinates must be finite numbers.');
+  const rounded = Number(value.toFixed(COORDINATE_DECIMALS));
+  return rounded === 0 ? 0 : rounded;
+}
+export function roundPoint(point: Point): Point {
+  return { x: roundCoordinate(point.x), y: roundCoordinate(point.y) };
+}
+export function signedArea(points: Point[]): number {
   if (points.length < 3) return 0;
-  // Translate to the first point to reduce cancellation far from the origin.
   const origin = points[0]!;
   return (
-    Math.abs(
-      points.reduce((sum, a, i) => {
-        const b = points[(i + 1) % points.length]!;
-        return (
-          sum +
-          (a.x - origin.x) * (b.y - origin.y) -
-          (b.x - origin.x) * (a.y - origin.y)
-        );
-      }, 0),
-    ) / 2
+    points.reduce((sum, a, i) => {
+      const b = points[(i + 1) % points.length]!;
+      return (
+        sum +
+        (a.x - origin.x) * (b.y - origin.y) -
+        (b.x - origin.x) * (a.y - origin.y)
+      );
+    }, 0) / 2
   );
+}
+export function area(points: Point[]): number {
+  return Math.abs(signedArea(points));
+}
+export function counterClockwise(points: Point[]): Point[] {
+  return signedArea(points) < 0
+    ? [points[0]!, ...points.slice(1).reverse()]
+    : points;
 }
 export function perimeter(points: Point[]): number {
   return points.reduce(

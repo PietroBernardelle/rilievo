@@ -1,4 +1,10 @@
-import { roomPoints, validatePolygon } from './geometry';
+import { normalizeBlock } from './normalize';
+import {
+  counterClockwise,
+  roundPoint,
+  roomPoints,
+  validatePolygon,
+} from './geometry';
 import type { Block, EdgeRef, Point, PointRef, Project, Room } from './types';
 
 export const SCHEMA_VERSION = 1;
@@ -27,7 +33,9 @@ function _block(project: Project, id: string): Block {
 function _replaceBlock(project: Project, block: Block): Project {
   return {
     ...project,
-    blocks: project.blocks.map((item) => (item.id === block.id ? block : item)),
+    blocks: project.blocks.map((item) =>
+      item.id === block.id ? normalizeBlock(block) : item,
+    ),
   };
 }
 function _room(block: Block, id: string): Room {
@@ -41,6 +49,7 @@ export function createRoom(
   points: Point[],
   height: number,
 ): { project: Project; blockId: string; roomId: string } {
+  points = counterClockwise(points.map(roundPoint));
   validatePolygon(points);
   if (!Number.isFinite(height) || height <= 0)
     throw new Error('Room height must be greater than zero.');
@@ -111,6 +120,7 @@ export function moveCorner(
   vertexId: string,
   point: Point,
 ): Project {
+  point = roundPoint(point);
   const block = _block(project, blockId);
   const vertex = block.vertices.find((item) => item.id === vertexId);
   if (!vertex) throw new Error(`Corner ${vertexId} does not exist.`);

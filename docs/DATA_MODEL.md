@@ -71,3 +71,18 @@ A measurement end (`a` or `b`) can be:
 - `sketch` keeps the original drawn position. The fit writes `x`/`y`, so the sketch can always be restored.
 - Rooms never share vertices. Rooms are tied together through `joins`. This keeps each room's fit independent and the joins explicit.
 - Never delete measurements. Mark wrong ones `rejected`, so the history is kept.
+
+## Polygon convention and coordinate precision
+
+- Coordinates use **x right, y up**. Every room is stored counter-clockwise
+  (positive signed area), on creation, manual editing, and JSON load/save.
+- Edge `i` goes from `vertexIds[i]` to `vertexIds[(i + 1) % n]`.
+  Its outward unit normal is on the **right**: `(dy, -dx) / length`.
+- Normalisation keeps the first vertex fixed and reverses the remaining order
+  when necessary. Edge indices, opening offsets, jamb sides and edge-point `t`
+  values are remapped together, preserving their physical locations. Rejected
+  measurements retain historical references to deleted geometry.
+- Snapped points, stored corner `x`/`y`, their `sketch` coordinates, and block
+  placement `x`/`y` are rounded to **0.0001 m**. Display remains at 3 decimals.
+  Geometry that collapses at this precision is rejected.
+- These are normalisation rules for the existing schema; `schemaVersion` stays 1.
