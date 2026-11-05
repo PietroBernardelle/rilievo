@@ -76,12 +76,14 @@ press S to resume. Opening/height/join workflow steps remain in M4.
 
 - [x] Detect corner–corner and corner–edge contacts within 1 mm in sketch coordinates.
 - [x] Couple contacts with 5 mm soft residuals while either room has no done readings.
-- [x] Preserve unmeasured room edge lengths with 0.10 m priors and a weak 10 m position anchor.
+- [x] Keep unmeasured rooms square with 0.5° angle priors, 0.5 m edge-length priors and a weak 10 m position anchor.
 - [x] Fit contacted rooms together; keep disconnected rooms separate and the first-room gauge fixed.
 - [x] Show active attachments as small cyan dots, with no project schema change.
 - [x] Test following, stretching, free neighbour movement, contact release and isolated rooms.
+- [x] Let corner–edge contacts slide along the line, with a soft segment-limit penalty.
+- [x] Add regression tests for Cucina shrinking in both dimensions, a top room retaining its width, and a rectangular room chain.
 
-Corner–edge contacts retain their sketched fraction. Measured neighbours may shift;
+Corner–edge contacts slide without pinning a fraction. Measured neighbours may shift;
 cross-room measurements can constrain the space and make the middle room stretch.
 
 ## M4: openings, heights, joins

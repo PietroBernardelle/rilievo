@@ -12,12 +12,13 @@ Minimise Σ rᵢ², where each residual is divided by its standard deviation:
 |---|---|---|
 | Distance measurement | (‖pa − pb‖ − value) / σ | σ = √(laserσ² + placementσ²) ≈ 5 mm |
 | Height / sill / width | (fitted − value) / σ | as above (may be stored outside the 2D fit) |
-| Right angle (from sketch) | angle error / σθ | soft, σθ ≈ 2° (old houses are not square) |
+| Right angle (from sketch) | angle error / σθ | unmeasured: σθ = 0.5°, weight 1; measured: σθ = 2°, weight 0.1 (old houses are not square) |
 | Collinear / parallel | geometry error / σ | soft or hard (from joins) |
 | Sketch position, measured room | (p − p_sketch) / σs | very weak, σs = 1 m |
-| Unmeasured room shape | (edge length − sketch edge length) / σe | σe = 0.10 m, plus the existing angle prior |
+| Unmeasured room shape | (edge length − sketch edge length) / σe | σe = 0.5 m; right angles dominate the shape |
 | Unmeasured room position | (p − p_sketch) / σs | very weak anchor, σs = 10 m |
-| Active sketch contact | (pa − pb) / σc, one residual per coordinate | σc = 0.005 m |
+| Active corner–corner contact | (pa − pb) / σc, one residual per coordinate | σc = 0.005 m |
+| Active corner–edge contact | perpendicular distance / σc; segment overshoot / σc | σc = 0.005 m; free sliding inside the segment |
 | Join (shared wall) | offset between facing edges minus thickness | σ ≈ 5 mm |
 
 Solve with **Levenberg–Marquardt** (Gauss–Newton with damping). Use a numeric Jacobian (central differences) in v1; switch to an analytic one if it's slow. Problems are small (one floor is about 50–150 unknowns), so dense matrices are fine. Write it ourselves (about 150 lines) instead of pulling in a heavy library.
@@ -56,9 +57,12 @@ Each room is fitted on its inside faces. Two rooms sharing a wall are tied by a 
 - Two corners in different rooms within **0.001 m** form a corner–corner contact.
   Each pair is included once; its two incident edges do not add duplicate contacts.
 - A remaining corner within **0.001 m** of another room's nearest edge forms a
-  corner–edge contact. Its projected fractional position `t` is taken from the
-  sketch and stays fixed while the edge is fitted. The corner follows that point
-  in both x and y; it does not slide along the edge.
+  corner–edge contact. The sketch identifies the edge, but does not pin a fraction
+  along it. A point-on-line residual keeps the corner on the fitted edge's line;
+  sliding within the segment is free. A second residual penalises only the
+  distance beyond either endpoint, measured along the line. Both use sigma
+  0.005 m. These inferred contacts are separate from recorded `edgePoint`
+  measurement references, which still retain their fixed `t`.
 - A contact is active only while at least one of its rooms has **no `done`
   measurements**. For this rule, a room owns a measurement when either endpoint
   belongs to it. Queued, skipped and rejected records do not count. Once both
@@ -70,11 +74,14 @@ fitted gap. Contacts are not written into measurements, constraints or project
 JSON. On the plan, small cyan dots identify the active attached corners and follow
 their fitted positions; dots disappear when the contact no longer applies.
 
-An unmeasured room keeps its sketched edge lengths with **sigma 0.10 m**, retains
-the existing angle priors, and has only a **10 m** absolute position prior. Thus
-an attached room normally translates with its neighbour rather than compressing
-to keep its far wall at the original coordinates. These are soft shape priors:
-the room can stretch when contacts on opposite sides require it.
+An unmeasured room uses **sigma 0.5°** for right angles, **sigma 0.5 m** for sketched
+edge lengths, and a weak **10 m** absolute position prior. Generated right-angle
+constraints have weight 1 until the room has a done measurement. The stronger
+angle prior keeps rectangular sketches square as attached walls change length;
+the weaker length prior allows the opposite wall to follow. Edge contacts slide
+instead of shrinking a room in proportion to its neighbour. These are soft shape
+priors: the room can stretch when contacts on opposite sides require it, and weak
+position anchors can accumulate small length differences along a chain.
 
 Measured rooms retain the existing 1 m position prior and may translate or rotate
 within the connected problem. Only the first room's origin/orientation is fixed.
@@ -117,8 +124,10 @@ block together only when the fit converges.
   inspect that status before treating the result as a completed fit.
 - `options.tolerance` defaults to 0.015 m; `options.maxIterations` defaults to 120.
   Each recorded measurement's positive `sigma` supplies its weight. Join sigma
-  defaults to `hypot(0.002, 0.005)` m. Right-angle priors use a 2° sigma and the
-  schema example's weight 0.1; they are generated within 5° of perpendicular.
+  defaults to `hypot(0.002, 0.005)` m. Right-angle priors use a 0.5° sigma and
+  generated weight 1 in rooms without done measurements. Measured rooms retain
+  the 2° sigma and generated weight 0.1. Priors are generated within 5° of perpendicular.
+  Explicit constraint weights and hard constraints retain their specified strength.
   Explicit perpendicular constraints override generation for the same edge pair.
 - The first room's first corner is exactly `(0, 0)` and its first edge points
   along +x. Sketch priors are transformed into that same reference frame, while
@@ -172,9 +181,14 @@ unchecked measurements with one diagonal, correct measurements, ambiguous and
 unique leave-one-out explanations, joined groups, unequal sigmas, component
 placement, and an eight-room fit with one bad wall in under 500 ms.
 M3.1 tests in `contacts.test.ts` cover the 1 mm threshold, corner/edge matching,
-fixed edge fractions, 50 mm neighbour movement without width loss, stretching and
+sliding edge contacts and segment limits, 50 mm neighbour movement without width loss, stretching and
 free measured-neighbour movement, contact release, disconnected rooms, propagation
 through a chain, fixed origin/orientation, repeat fits and schema-1 round trips.
+Regression cases fit Cucina from 5.0 × 3.8 m to 4.9 × 3.7 m: a corner-attached
+Room 2 becomes 2.000 × 3.700 m; a room attached at x = 1 and x = 4 on the top edge
+keeps its 3.000 m width at y = 3.700 m. Both use 0.5 mm length tolerance. A third
+room follows through Room 2 with 2 mm length tolerance for the accumulated soft
+anchors. Every unmeasured room's angles stay within 0.1° of 90°.
 
 ```sh
 npm test -- src/solver

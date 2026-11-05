@@ -1,6 +1,6 @@
 import { distance, nearestOnSegment } from '../model/geometry';
-import type { Block, PointRef, Room, Vertex } from '../model/types';
-import { pointRoom } from './geometry';
+import type { Block, EdgeRef, Room, Vertex } from '../model/types';
+import { edgeEndpoints, pointRoom, resolvePoint } from './geometry';
 
 export const CONTACT_TOLERANCE = 0.001;
 export const CONTACT_SIGMA = 0.005;
@@ -9,7 +9,31 @@ const DISTANCE_EPSILON = 1e-12;
 export interface SketchContact {
   roomIds: [string, string];
   a: { vertex: string };
-  b: PointRef;
+  b: { vertex: string } | { edge: EdgeRef };
+}
+
+export function contactResiduals(
+  block: Block,
+  contact: SketchContact,
+): number[] {
+  const point = resolvePoint(block, contact.a);
+  if ('vertex' in contact.b) {
+    const target = resolvePoint(block, contact.b);
+    return [
+      (point.x - target.x) / CONTACT_SIGMA,
+      (point.y - target.y) / CONTACT_SIGMA,
+    ];
+  }
+  const [a, b] = edgeEndpoints(block, contact.b.edge);
+  const length = Math.max(1e-12, distance(a, b));
+  const ux = (b.x - a.x) / length;
+  const uy = (b.y - a.y) / length;
+  const dx = point.x - a.x;
+  const dy = point.y - a.y;
+  const along = dx * ux + dy * uy;
+  // Sliding inside the segment is free; only overshooting either endpoint costs.
+  const outside = Math.min(along, 0) + Math.max(along - length, 0);
+  return [(dx * uy - dy * ux) / CONTACT_SIGMA, outside / CONTACT_SIGMA];
 }
 
 export function measuredRoomIds(block: Block): Set<string> {
@@ -44,7 +68,7 @@ function _edgeContact(
     contact = {
       roomIds: [source.id, target.id],
       a: { vertex: corner.id },
-      b: { edgePoint: [target.id, edge], t: distance(a, point) / length },
+      b: { edge: [target.id, edge] },
     };
   }
   return contact;

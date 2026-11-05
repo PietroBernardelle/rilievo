@@ -6,13 +6,14 @@ import {
 } from '../model/geometry';
 import type { Block, Constraint, Point } from '../model/types';
 import { sketchConstraints } from './constraints';
-import { CONTACT_SIGMA, measuredRoomIds, sketchContacts } from './contacts';
+import { contactResiduals, measuredRoomIds, sketchContacts } from './contacts';
 import { edgeEndpoints, pairedOpening, resolvePoint } from './geometry';
 import type { LeastSquaresProblem } from './lm';
 
 export const ANGLE_SIGMA = (2 * Math.PI) / 180;
 export const SKETCH_SIGMA = 1;
-export const UNMEASURED_EDGE_SIGMA = 0.1;
+export const UNMEASURED_ANGLE_SIGMA = (0.5 * Math.PI) / 180;
+export const UNMEASURED_EDGE_SIGMA = 0.5;
 export const UNMEASURED_ANCHOR_SIGMA = 10;
 export const JOIN_SIGMA = Math.hypot(0.002, 0.005);
 export interface FitProblem extends LeastSquaresProblem {
@@ -131,8 +132,15 @@ export function createFitProblem(block: Block): FitProblem {
     for (const constraint of constraints) {
       if (constraint.hard) continue;
       const weight = Math.sqrt(constraint.weight ?? 1);
+      const roomId = constraint.edges[0]![0];
+      const angleSigma =
+        constraint.kind === 'perpendicular' &&
+        !measured.has(roomId) &&
+        constraint.edges.every(([id]) => id === roomId)
+          ? UNMEASURED_ANGLE_SIGMA
+          : ANGLE_SIGMA;
       _constraintResiduals(current, constraint).forEach((value, i) =>
-        residuals.push((value * weight) / (i === 0 ? ANGLE_SIGMA : JOIN_SIGMA)),
+        residuals.push((value * weight) / (i === 0 ? angleSigma : JOIN_SIGMA)),
       );
     }
     current.vertices.forEach((vertex, i) => {
@@ -153,11 +161,8 @@ export function createFitProblem(block: Block): FitProblem {
           edge.length) /
           UNMEASURED_EDGE_SIGMA,
       );
-    for (const contact of contacts) {
-      const a = resolvePoint(current, contact.a);
-      const b = resolvePoint(current, contact.b);
-      residuals.push((a.x - b.x) / CONTACT_SIGMA, (a.y - b.y) / CONTACT_SIGMA);
-    }
+    for (const contact of contacts)
+      residuals.push(...contactResiduals(current, contact));
     current.openings.forEach((opening, i) =>
       residuals.push(
         (opening.offset - block.openings[i]!.offset) / SKETCH_SIGMA,

@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { distance, roomPoints } from '../../model/geometry';
+import { distance, nearestOnSegment, roomPoints } from '../../model/geometry';
 import { createProject, createRoom } from '../../model/project';
 import { loadProject, saveProject } from '../../model/json';
 import type { Block } from '../../model/types';
 import { connectedRoomGroups } from '../components';
-import { measuredRoomIds, sketchContacts } from '../contacts';
+import { contactResiduals, measuredRoomIds, sketchContacts } from '../contacts';
+import type { SketchContact } from '../contacts';
 import { fit } from '../fit';
-import { resolvePoint } from '../geometry';
+import { edgeEndpoints, resolvePoint } from '../geometry';
 import { measurement, rectangleMeasurements } from './fixtures';
 
 function rectangles(shapes: [number, number, number, number][]): Block {
@@ -38,12 +39,67 @@ function measureRoom(
   );
 }
 function attachmentGaps(block: Block): number[] {
-  return sketchContacts(block).map((contact) =>
-    distance(resolvePoint(block, contact.a), resolvePoint(block, contact.b)),
-  );
+  return sketchContacts(block).map((contact) => {
+    const point = resolvePoint(block, contact.a);
+    const target =
+      'vertex' in contact.b
+        ? resolvePoint(block, contact.b)
+        : nearestOnSegment(point, ...edgeEndpoints(block, contact.b.edge));
+    return distance(point, target);
+  });
+}
+
+function expectRectangle(
+  block: Block,
+  roomIndex: number,
+  width: number,
+  height: number,
+  lengthTolerance = 0.0005,
+): void {
+  const points = roomPoints(block, block.rooms[roomIndex]!, false);
+  for (let i = 0; i < 4; i++) {
+    const a = points[i]!;
+    const b = points[(i + 1) % 4]!;
+    const c = points[(i + 2) % 4]!;
+    expect(
+      Math.abs(distance(a, b) - (i % 2 === 0 ? width : height)),
+    ).toBeLessThan(lengthTolerance);
+    const cosine =
+      ((a.x - b.x) * (c.x - b.x) + (a.y - b.y) * (c.y - b.y)) /
+      (distance(a, b) * distance(b, c));
+    const angle =
+      (Math.acos(Math.max(-1, Math.min(1, cosine))) * 180) / Math.PI;
+    expect(Math.abs(angle - 90)).toBeLessThan(0.1);
+  }
 }
 
 describe('sketch contact detection', () => {
+  it('allows sliding along rotated edges and penalises perpendicular gaps and segment overshoot', () => {
+    const block = rectangles([
+      [0, 0, 5, 3],
+      [5, 0.5, 2, 2],
+    ]);
+    const contact: SketchContact = {
+      roomIds: ['r2', 'r1'],
+      a: { vertex: 'v5' },
+      b: { edge: ['r1', 1] },
+    };
+    // A 3 m edge rotated to the (3/5, 4/5) direction.
+    Object.assign(block.vertices[1]!, { x: 2, y: 1 });
+    Object.assign(block.vertices[2]!, { x: 3.8, y: 3.4 });
+    for (const along of [-0.02, 0, 0.4, 1.5, 3, 3.03]) {
+      for (const gap of [-0.005, 0, 0.005]) {
+        Object.assign(block.vertices[4]!, {
+          x: 2 + 0.6 * along + 0.8 * gap,
+          y: 1 + 0.8 * along - 0.6 * gap,
+        });
+        const residuals = contactResiduals(block, contact);
+        expect(residuals[0]).toBeCloseTo(gap / 0.005, 10);
+        const expectedOvershoot = along < 0 ? -4 : along > 3 ? 6 : 0;
+        expect(residuals[1]).toBeCloseTo(expectedOvershoot, 10);
+      }
+    }
+  });
   it('uses sketch coordinates, includes the 1 mm boundary, and avoids duplicate corner/edge contacts', () => {
     const block = rectangles([
       [0, 0, 5, 3],
@@ -64,7 +120,7 @@ describe('sketch contact detection', () => {
     for (const vertex of separate.vertices.slice(4)) vertex.x -= 0.0011;
     expect(sketchContacts(separate)).toEqual([]);
   });
-  it('retains the sketch fraction on an edge, including after fitting', () => {
+  it('retains the contacted edge after fitting without pinning a fraction', () => {
     const block = rectangles([
       [0, 0, 5, 3],
       [5, 0.5, 2, 2],
@@ -73,16 +129,12 @@ describe('sketch contact detection', () => {
     expect(contacts).toHaveLength(2);
     expect(contacts[0]).toMatchObject({
       a: { vertex: 'v5' },
-      b: { edgePoint: ['r1', 1] },
+      b: { edge: ['r1', 1] },
     });
     expect(contacts[1]).toMatchObject({
       a: { vertex: 'v8' },
-      b: { edgePoint: ['r1', 1] },
+      b: { edge: ['r1', 1] },
     });
-    expect('edgePoint' in contacts[0]!.b && contacts[0]!.b.t).toBeCloseTo(
-      1 / 6,
-      12,
-    );
     measureRoom(block, 0, 4.95, 3);
     const result = fit(block);
     expect(result.converged).toBe(true);
@@ -123,6 +175,47 @@ describe('sketch contact detection', () => {
 });
 
 describe('M3.1 attached rooms', () => {
+  it('keeps Room 2 rectangular when Cucina shrinks from 5.0 × 3.8 to 4.9 × 3.7', () => {
+    const block = rectangles([
+      [0, 0, 5, 3.8],
+      [5, 0, 2, 3.8],
+    ]);
+    measureRoom(block, 0, 4.9, 3.7);
+    const result = fit(block);
+    expect(result.converged).toBe(true);
+    expectRectangle(result.block, 0, 4.9, 3.7);
+    expectRectangle(result.block, 1, 2, 3.7);
+    expect(result.block.vertices[4]!.x).toBeCloseTo(4.9, 3);
+    expect(Math.max(...attachmentGaps(result.block))).toBeLessThan(0.001);
+  });
+  it('lets Room 4 slide along Cucina’s top edge without squashing its 3 m width', () => {
+    const block = rectangles([
+      [0, 0, 5, 3.8],
+      [1, 3.8, 3, 2],
+    ]);
+    measureRoom(block, 0, 4.9, 3.7);
+    const result = fit(block);
+    expect(result.converged).toBe(true);
+    expectRectangle(result.block, 1, 3, 2);
+    for (const vertex of result.block.vertices.slice(4, 6))
+      expect(vertex.y).toBeCloseTo(3.7, 3);
+    expect(Math.max(...attachmentGaps(result.block))).toBeLessThan(0.001);
+  });
+  it('propagates Cucina’s width and height change through Room 2 to rectangular Room 3', () => {
+    const block = rectangles([
+      [0, 0, 5, 3.8],
+      [5, 0, 2, 3.8],
+      [7, 0, 2, 3.8],
+    ]);
+    measureRoom(block, 0, 4.9, 3.7);
+    const result = fit(block);
+    expect(result.converged).toBe(true);
+    // Absolute anchors accumulate along the chain; allow 2 mm for these soft priors.
+    expectRectangle(result.block, 1, 2, 3.7, 0.002);
+    expectRectangle(result.block, 2, 2, 3.7, 0.002);
+    expect(Math.abs(result.block.vertices[8]!.x - 6.9)).toBeLessThan(0.002);
+    expect(Math.max(...attachmentGaps(result.block))).toBeLessThan(0.001);
+  });
   it('moves the attached unmeasured room 50 mm left while retaining its sketched width', () => {
     const block = rectangles([
       [0, 0, 5, 3],
@@ -168,8 +261,10 @@ describe('M3.1 attached rooms', () => {
     expect(Math.max(...attachmentGaps(result.block))).toBeLessThan(0.001);
     const middle = roomPoints(result.block, block.rooms[1]!, false);
     const right = roomPoints(result.block, block.rooms[2]!, false);
-    expect(right[0]!.x).toBeLessThan(6.96);
-    expect(Math.abs(distance(middle[0]!, middle[1]!) - 2)).toBeLessThan(0.002);
+    expect(right[0]!.x).toBeLessThan(6.99);
+    // The weaker edge prior allows some stretching as well as neighbour movement.
+    expect(distance(middle[0]!, middle[1]!)).toBeGreaterThan(2);
+    expect(distance(middle[0]!, middle[1]!)).toBeLessThan(2.05);
     expect(distance(right[0]!, right[1]!)).toBeCloseTo(3, 3);
   });
   it('stretches an unmeasured middle room when measured distances fix the available space', () => {

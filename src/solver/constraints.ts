@@ -1,8 +1,10 @@
 import { roomPoints } from '../model/geometry';
 import type { Block, Constraint, EdgeRef } from '../model/types';
+import { measuredRoomIds } from './contacts';
 
 export const RIGHT_ANGLE_THRESHOLD = (5 * Math.PI) / 180;
 export const SKETCH_ANGLE_WEIGHT = 0.1;
+export const UNMEASURED_ANGLE_WEIGHT = 1;
 function _key(edges: EdgeRef[]): string {
   return edges
     .map(([room, index]) => `${room}:${index}`)
@@ -10,6 +12,7 @@ function _key(edges: EdgeRef[]): string {
     .join('|');
 }
 export function sketchConstraints(block: Block): Constraint[] {
+  const measured = measuredRoomIds(block);
   const existing = new Set(
     block.constraints
       .filter((item) => item.kind === 'perpendicular')
@@ -38,7 +41,9 @@ export function sketchConstraints(block: Block): Constraint[] {
         constraints.push({
           kind: 'perpendicular',
           edges,
-          weight: SKETCH_ANGLE_WEIGHT,
+          weight: measured.has(room.id)
+            ? SKETCH_ANGLE_WEIGHT
+            : UNMEASURED_ANGLE_WEIGHT,
         });
     }
   }
