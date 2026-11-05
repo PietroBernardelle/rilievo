@@ -88,8 +88,19 @@ cross-room measurements can constrain the space and make the middle room stretch
 
 ## M4: openings, heights, joins
 
-- Door (`D`), window (`W`) and arch tools on edges; their measurements are added to the queue.
-- Room heights. Wall thickness at doorways. Joins between rooms, fitted together.
+- [x] Door (`D`), window (`W`) and arch (`A`) placement, movement and end resizing with 0.050 m snap.
+- [x] Editable dimensions, hinge and swing; paired doorways with automatic and manual linking.
+- [x] Jamb, opening-height, window-sill/thickness, two room-height and join survey steps.
+- [x] Offset/width fitting, measured doorway separation and sloping-ceiling feedback.
+- [x] Double wall lines and dark grey poche; editable exterior thickness (default 0.400 m).
+- [x] Pair deletion retains measurement history; all operations support undo/redo.
+- [x] Schema 2 with a version-1 migration; model, solver, survey and browser regression checks.
+
+New doorway pairs stay touching until thickness is measured; the 0.300 m default
+is labelled unmeasured. New opening sizes are documented in DATA_MODEL.md.
+Tests exercise case 6 through the UI's survey transactions, window fitting,
+sloping ceilings and paired deletion. Browser checks cover placement, drag/resize,
+properties, measurement prompts, undo/redo and reload.
 
 ## M5: export
 

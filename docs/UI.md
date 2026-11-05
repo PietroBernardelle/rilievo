@@ -19,7 +19,7 @@ Inspiration: AutoCAD R12 for DOS (black drawing area, bright line colours, comma
 │ X 3.120  Y 1.004 | SNAP ON | GRID 0.10 | RMS 0.8 | 12/24 done │
 └────────────────────────────────────────────────────────────────┘
 ```
-- **Left tool palette** (vertical, icon buttons with a single-letter hint): Select `V`, Rectangle `R`, Polygon `P`, Circle `C`, Line `L`, Door `D`, Window `W`, Measure (custom) `M`, Pan `Space` drag.
+- **Left tool palette** (vertical, icon buttons with a single-letter hint): Select `V`, Rectangle `R`, Polygon `P`, Circle `C`, Line `L`, Door `D`, Window `W`, Arch `A`, Measure (custom) `M`, Pan `Space` drag.
 - **Right panel:** Blocks / Rooms tree, Properties of the selection, Measurement queue (progress, list, residuals coloured).
 - **Bottom command line:** shows the current prompt and takes the typed value. It's where survey mode happens. Commands can also be typed (`rect`, `door`, `export pdf`), like AutoCAD.
 - **Status bar:** cursor coordinates, snap, grid, fit RMS, survey progress.
@@ -40,3 +40,14 @@ Inspiration: AutoCAD R12 for DOS (black drawing area, bright line colours, comma
 
 ## Later: tablet/phone
 The tool palette becomes a bottom bar, the right panel a slide-up sheet, and the command line a large number pad. Touch: one finger draws or selects, two fingers pan and zoom.
+
+## M4 drawing details
+
+Walls have dark grey (`#303030`) poche between their inner and outer lines. Keep
+cyan walls and white selections. Exterior thickness starts at 0.400 m; measured
+joins define interior thickness. Pending joins stay touching until measured.
+Doorways interrupt the wall fill and show a leaf plus swing arc, windows have three
+parallel lines, and arches are clear gaps. Shared doors show one physical swing.
+Selected openings have two square resize handles. Scalar survey prompts show a
+magenta vertical arrow and a height/sill/thickness label. Room details include
+height readings, a red sloping-ceiling warning, openings and per-edge thickness.

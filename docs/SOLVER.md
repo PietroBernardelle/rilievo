@@ -3,7 +3,7 @@
 A pure TypeScript module (`src/solver/`), with no UI imports, unit-tested on its own.
 
 ## Unknowns
-The x, y of every vertex in the block, plus the positions of openings along their edges. To pin the plan down, the first vertex of the first room is fixed at (0, 0), and the first wall of that room points along +x. Everything else can move.
+The x, y of every vertex in the block, plus opening offsets and observable widths along their edges. To pin the plan down, the first vertex of the first room is fixed at (0, 0), and the first wall of that room points along +x. Everything else can move.
 
 ## Residuals (weighted least squares)
 Minimise Σ rᵢ², where each residual is divided by its standard deviation:
@@ -93,7 +93,8 @@ the requested freedom of measured neighbours without adding artificial anchors.
 Active contacts join solver components just like explicit joins and cross-room
 measurements. Disconnected rooms retain the existing separate-fit placement.
 Shape priors and contacts do not count as measurement evidence for rigidity,
-redundancy, consistency or unchecked status. The JSON schema remains version 1.
+redundancy, consistency or unchecked status. In M4, an explicit join replaces
+sketch contacts between its two rooms.
 
 ## Tests
 See `examples/solver-cases.md`. Every case is a unit test that must pass before survey mode is wired to the UI.
@@ -149,20 +150,40 @@ block together only when the fit converges.
   outside the 2D fit and are returned in `deferredMeasurementIds`. No measurement
   status or value is changed by fitting.
 - Rigidity uses the rank of the measured-distance Jacobian, excluding priors, contacts and
-  joins. Unknown opening offsets are eliminated from that rank count so that
+  joins. Unknown opening offsets and fitted widths are eliminated from that rank count so that
   jamb measurements do not falsely imply independent corner constraints.
 - `leaveOneOut` returns one refit summary per omitted measurement, ordered by
   the remaining measurements' normalised RMS. Each summary includes `consistent`
   and remaining `redundancy`, as well as `rms`, `maxResidual`, and `converged`.
   It leaves the source history intact. Consistency and suspect results are transient
-  solver output; the project JSON schema remains at version 1.
+  solver output; M4 saves schema version 2 and migrates version-1 files.
 
-### Pairing doorway records without changing schema 1
+### Explicit doorway pairs and scalar readings (M4)
 
-A join's `via` identifies an opening on either of its joined edges. The opposite
-edge must contain exactly one opening with the same type and width (within
-0.0001 m). Zero or multiple matches produce a descriptive error. This rule was
-confirmed for M2; no additional join fields are introduced.
+New joins identify both openings with `via` and `pairedWith`. The version-1
+loader resolves the old unique type/width match once and stores the result.
+Widths can then vary independently during optimisation; the two jamb-alignment
+residuals encourage the paired openings to agree. Existing direct solver callers
+without `pairedWith` still use the unique legacy match.
+
+An unmeasured join has a stored default of 0.300 m but uses zero separation in the
+fit, so rooms stay touching until thickness is measured. Once measured, its
+residuals use the recorded thickness. Explicit joins suppress inferred contacts
+between their two rooms; unjoined room pairs retain the M3.1 contact rules.
+
+Opening offsets are always unknowns. Width becomes an unknown once active
+measurements reference both jamb sides (including a direct width measurement);
+this also frees its explicitly paired opening's width. Until then, width stays at
+its drawn value, avoiding arbitrary changes from an underdetermined single-jamb
+reading. Both offset and free width retain weak 1 m priors. Feasibility requires
+positive width and both jambs inside the host edge. The measurement Jacobian and
+rigidity checks include free width as an opening nuisance parameter.
+
+Height, sill, window-wall thickness and doorway-thickness targets are scalar
+readings. The survey transaction updates their stored dimensions before fitting;
+they do not add distance rows or artificial redundancy to the 2D diagnostics.
+Heights are returned as deferred measurement IDs. Room height is the mean of its
+two readings; the UI flags a slope when their difference exceeds 0.020 m.
 
 For CCW rooms, facing walls run in opposite directions. Jamb side 0 on one room
 therefore aligns with side 1 on the other, separated along the first wall's outward
@@ -183,7 +204,7 @@ placement, and an eight-room fit with one bad wall in under 500 ms.
 M3.1 tests in `contacts.test.ts` cover the 1 mm threshold, corner/edge matching,
 sliding edge contacts and segment limits, 50 mm neighbour movement without width loss, stretching and
 free measured-neighbour movement, contact release, disconnected rooms, propagation
-through a chain, fixed origin/orientation, repeat fits and schema-1 round trips.
+through a chain, fixed origin/orientation, repeat fits and JSON round trips.
 Regression cases fit Cucina from 5.0 × 3.8 m to 4.9 × 3.7 m: a corner-attached
 Room 2 becomes 2.000 × 3.700 m; a room attached at x = 1 and x = 4 on the top edge
 keeps its 3.000 m width at y = 3.700 m. Both use 0.5 mm length tolerance. A third
@@ -193,3 +214,8 @@ anchors. Every unmeasured room's angles stay within 0.1° of 90°.
 ```sh
 npm test -- src/solver
 ```
+
+M4 regression tests run case 6 through the survey transactions used by the UI,
+including both sides' jamb readings and the 0.300 m thickness. They also cover
+pending joins, automatic pairing, window offset/width fitting, room-height slope
+flags, measurement history after deletion, schema migration and undo/redo.

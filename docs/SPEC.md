@@ -64,8 +64,7 @@ The user can reorder, skip or add a custom measurement (click two points, then t
 ### M3 survey controls and feedback
 
 - Press **S** or use **Survey → Start survey**. The selected room's pending queue
-  comes first; subsequent pending readings follow queue order. Walls and diagonals
-  are implemented in M3; opening, height and join workflow steps follow in M4.
+  comes first; subsequent pending readings follow queue order. M4 continues after walls and diagonals with openings, room heights and joins.
 - Type a value and press Enter. The reading and its converged fit commit together,
   then the next prompt receives focus. Invalid input or a failed solve leaves the
   reading, plan and queue unchanged. Sketch positions are retained.
@@ -100,3 +99,26 @@ The user can reorder, skip or add a custom measurement (click two points, then t
 - A 5-room floor can be sketched, surveyed, and exported to SVG, PDF and DXF in one session.
 - The test cases in `examples/solver-cases.md` pass.
 - An inconsistent measurement is flagged, and re-entering it clears the flag.
+
+## M4 opening and wall workflow
+
+- D / W / A place a door, window or arch on the clicked edge. V selects an
+  opening; drag its body to move or either square end to resize, in 0.050 m steps.
+  Properties edit dimensions, door hinge side and inward/outward swing.
+- Doors/arches on an active shared edge create a paired opening and an unmeasured
+  join. The default 0.300 m thickness is shown, but faces stay touching until a
+  thickness reading is entered. Properties can link or unlink a pair manually.
+- After a room's walls and diagonals, measure both jambs from the corner nearest
+  the opening, then its height and (for windows) sill and wall thickness. Width
+  follows from jamb readings. The chosen corner remains stable as the fit moves.
+- Next measure room height at two opposite corners, then doorway thickness and
+  the neighbouring room's two jamb positions. A shared opening is surveyed once;
+  its opposite jamb readings belong to the join step, avoiding duplicate requests.
+- Heights use a vertical arrow icon and text. Skip and re-measure work normally;
+  use Skip for inaccessible scalar readings, and Blocked for 2D distances.
+- Room Properties show the two height readings and a sloping-ceiling flag, opening
+  list, and editable thickness per edge. Exterior walls default to 0.400 m.
+  Measured joins supply interior thickness. Walls use dark grey poche between
+  cyan/white face lines, interrupted by openings; a paired door has one swing arc.
+- Deleting a doorway removes its pair and join and retains rejected measurement
+  history. Placement, edits, linking, unlinking and all readings are undoable.

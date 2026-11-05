@@ -2,11 +2,11 @@
 
 Sketch a building roughly, then let the app walk you through the laser measurements and fit the sketch to them. Built for surveying a house room by room (later: other floors, the garden) and exporting clean plans.
 
-Status: **M3.1 complete** — guided survey mode connects the sketch to the solver,
+Status: **M4 complete** — guided survey mode connects the sketch to the solver,
 with room consistency checks, re-measure suggestions and undoable readings.
 Attached unmeasured rooms follow fitted neighbours; small cyan dots mark active
 sketch contacts. Contacts release once both rooms have done measurements.
-Opening tools, height/join workflow steps and exports come in later milestones.
+Doors, windows, arches, heights and shared-wall surveys are implemented. Exports follow in M5.
 
 ## Development
 
@@ -57,8 +57,7 @@ The scoped `minimatch` override patches the lint parser's transitive dependency
 Live dimensions stay readable in screen pixels while zooming. At distant zoom
 levels, grid dots are thinned for legibility; snapping always uses 0.100 m.
 Moving a corner by hand updates both its current and sketch coordinates.
-Circle (`C`), Line (`L`), Door (`D`), and Window (`W`) are marked **Later** in the
-palette. Door/window tools are planned for M4; circle/line features for M6.
+Circle (`C`) and Line (`L`) remain marked **Later** for M6.
 Deleting geometry removes dependent wall/opening/join metadata and rejects affected
 measurements while preserving their historical endpoints. Unaffected edge references
 are reindexed. Invalid files and invalid polygon edits leave the project intact.
@@ -86,7 +85,24 @@ also work in an empty command field. Metres, comma decimals, cm and mm are accep
 Set placement uncertainty in **Survey → Settings** or **Edit → Settings**. The
 setting affects new and re-measured readings only. Project JSON and autosave retain
 the queue, skipped requests, old rejected values and settings; press S after reload
-to resume pending work. Opening/height/join workflow steps follow in M4.
+to resume pending work. The queue continues with openings, heights and joins.
+
+## Try openings and shared walls
+
+1. Sketch two touching rooms. Select the first, press **D**, and click their shared
+   edge. A paired door appears on the other room; Properties show **0.300 m ·
+   unmeasured**. Rooms stay touching until that thickness is measured.
+2. With **V**, drag the opening or its square end handles. Movement and resizing
+   snap to **0.050 m**. Properties edit width, offset, height, hinge and swing.
+   Use **W** for windows and **A** for arches. **Unlink pair** keeps both openings;
+   select another compatible opening in Properties to link them manually.
+3. Press **S**. After walls and diagonals, enter both jamb distances from the
+   indicated corner, opening height, window sill/thickness, and two room heights.
+   The doorway step asks for wall thickness and the neighbour's jamb positions.
+   A **0.300** thickness separates the faces by 30 cm while aligning the jambs.
+4. The room panel lists both heights and flags differences above **0.020 m**.
+   Expand **Wall thickness per edge** to edit exterior thickness. **Delete** on
+   either paired door removes both and their join; **Ctrl+Z** restores them.
 
 ## Source layout
 
@@ -101,7 +117,7 @@ Vitest runs in Node by default, and ESLint restricts UI imports and browser glob
 in the model and solver. Run `npm test -- src/solver` for the seven documented
 solver cases and numerical/diagnostic tests. See `docs/SOLVER.md` for the API.
 Run `npm test -- src/survey` for survey workflow tests.
-The JSON schema remains at version 1; unsupported versions are rejected.
+Saves use schema version 2. Existing version-1 files migrate automatically; unsupported future versions are rejected.
 
 IBM Plex Mono regular and semibold Latin webfonts are bundled under `public/fonts`
 from [Google Fonts](https://fonts.google.com/specimen/IBM+Plex+Mono), including
