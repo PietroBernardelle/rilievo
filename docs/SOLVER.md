@@ -53,7 +53,9 @@ See `examples/solver-cases.md`. Every case is a unit test that must pass before 
 
 `src/solver/index.ts` exports `fit(block, options?)`, `leaveOneOut(block, options?)`,
 and `resolvePoint(block, pointRef)`. These functions are pure; they do not mutate
-the input, import React/DOM, or run automatically in the sketch UI.
+the input or import React/DOM. M3 calls the solver when starting survey mode and
+after each entered reading. The pure survey session commits the reading and fitted
+block together only when the fit converges.
 
 - `fit` returns a fitted `block`, measurement `residuals`, normalised measurement
   `rms`, per-room `rooms` diagnostics, connected `groups`, and `generatedConstraints`.

@@ -50,7 +50,9 @@ The block design keeps everything modular. Nonna's floor is block 1. The upper f
 
 ## Measurement workflow (v1 rules)
 For each room, in this order:
-1. **Perimeter:** walls clockwise from the corner nearest the entrance door.
+1. **Perimeter:** walls clockwise from the corner nearest the entrance door. In M3,
+   start at corner A (the first stored corner); schema 1 has no entrance marker.
+   Click a queue item to start elsewhere, or use its up/down controls to reorder.
 2. **Diagonals:** for a 4-corner room, both diagonals. One makes it rigid; the second checks it. For an n-corner room, add diagonals until it is rigid (2n−3 independent distances), plus at least one extra as a check.
 3. **Openings:** for each door or window, the distance from the nearest corner to each jamb, the width, the height, and the sill.
 4. **Height:** room height, at 2 points if the ceiling may slope.
@@ -58,6 +60,36 @@ For each room, in this order:
 6. **Exterior** (when reachable): outside lengths of the building. The inside rooms plus walls must add up to these, which is the best overall check.
 
 The user can reorder, skip or add a custom measurement (click two points, then type a value) at any time.
+
+### M3 survey controls and feedback
+
+- Press **S** or use **Survey → Start survey**. The selected room's pending queue
+  comes first; subsequent pending readings follow queue order. Walls and diagonals
+  are implemented in M3; opening, height and join workflow steps follow in M4.
+- Type a value and press Enter. The reading and its converged fit commit together,
+  then the next prompt receives focus. Invalid input or a failed solve leaves the
+  reading, plan and queue unchanged. Sketch positions are retained.
+- Room status is **not rigid**, **rigid but unchecked** (measure the second
+  diagonal), **consistent** (green), or **inconsistent** (red). Red rooms show
+  ordered **Re-measure** suggestions even when every individual residual is below
+  15 mm. Individual unchecked distances remain marked in the queue.
+- **Skip** retains an inaccessible request as skipped. Click it later to measure
+  it. **Blocked** lets you choose the start or end corner, then a reachable point
+  inside an edge; the original request is skipped and an alternative is queued.
+  The chosen point uses the existing edge-fraction reference and follows the edge
+  when the plan fits. Choose the same marked point when taking the reading.
+- **Redo** re-measures the last reading; clicking a completed queue item or a
+  suggestion re-measures that item. The previous reading becomes rejected history.
+  **Undo / Ctrl+Z** restores the reading, geometry and cursor together;
+  **Ctrl+Shift+Z** restores the undone action. Command-key equivalents work on macOS.
+- **M** starts a custom distance: click two corners, jambs or edge points. **Esc**
+  cancels point picking or clears the current input. **S** stops survey mode.
+  In the command field, S/M/F shortcuts work when the input is empty, so unit
+  suffixes such as `3m` still work.
+- **Survey → Settings** (also under Edit) edits `placementSigma` in metres; comma
+  decimals and cm/mm are accepted. New and re-measured values store
+  `hypot(laserSigma, placementSigma)` as their sigma. Existing readings keep their
+  recorded sigma. Settings edits are undoable and saved with the project.
 
 ## Non-goals (v1)
 - No official or legal drawings. Those come from the geometra or architect.

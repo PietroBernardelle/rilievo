@@ -2,10 +2,9 @@
 
 Sketch a building roughly, then let the app walk you through the laser measurements and fit the sketch to them. Built for surveying a house room by room (later: other floors, the garden) and exporting clean plans.
 
-Status: **M2.1 complete** — the sketch UI includes M1.1 geometry and label fixes,
-and a tested pure solver is available in `src/solver`, including consistency tests,
-measurement redundancy and separate fits for independent rooms. Survey UI integration,
-opening tools, and exports come in later milestones.
+Status: **M3 complete** — guided survey mode connects the sketch to the solver,
+with room consistency checks, re-measure suggestions and undoable readings.
+Opening tools, height/join workflow steps and exports come in later milestones.
 
 ## Development
 
@@ -60,18 +59,44 @@ Deleting geometry removes dependent wall/opening/join metadata and rejects affec
 measurements while preserving their historical endpoints. Unaffected edge references
 are reindexed. Invalid files and invalid polygon edits leave the project intact.
 
+## Try survey mode
+
+1. Sketch a roughly 4 × 3 rectangle, clicking its bottom-left corner first, then
+   its top-right corner. Press **S**. The magenta arrow follows the clockwise
+   queue from corner A; other rooms dim.
+2. Enter **3**, **4**, **3**, **4**, **5**, **5**, pressing Enter after each value.
+   After the walls the room is not rigid; after the first diagonal it is rigid
+   but unchecked; after the second it becomes green and consistent.
+3. Click the **D → C** reading and enter **4.040**. The room turns red and shows
+   an ordered re-measure list, even though each residual is below 15 mm. Click
+   that reading again and enter **4.000** to clear the inconsistency.
+
+**Skip** keeps an unreachable request for later. **Blocked** lets you choose which
+endpoint is blocked, then pick a point on an edge. **M** adds a custom distance
+between two corners, jambs or edge points. Click queue rows to jump, and use their
+up/down buttons to reorder. **Redo** re-measures the last reading; **Ctrl+Z** and
+**Ctrl+Shift+Z** undo/redo the whole action, including its fit and queue position.
+**Esc** cancels picking or clears input; **S** stops survey mode. S/M/F shortcuts
+also work in an empty command field. Metres, comma decimals, cm and mm are accepted.
+
+Set placement uncertainty in **Survey → Settings** or **Edit → Settings**. The
+setting affects new and re-measured readings only. Project JSON and autosave retain
+the queue, skipped requests, old rejected values and settings; press S after reload
+to resume pending work. Opening/height/join workflow steps follow in M4.
+
 ## Source layout
 
 - `src/model`: pure project types, editing, geometry, JSON validation, and undo history.
 - `src/solver`: pure LM fitting, rigidity, consistency, residuals, and leave-one-out diagnostics.
+- `src/survey`: pure queue rules, point picking, measurement prompts and survey transactions.
 - `src/ui`: React components and the CAD theme.
 - `src/tools`: pure snapping and viewport helpers.
 - `src/export`: export formats (M5).
 
 Vitest runs in Node by default, and ESLint restricts UI imports and browser globals
 in the model and solver. Run `npm test -- src/solver` for the seven documented
-solver cases and numerical/diagnostic tests. See `docs/SOLVER.md` for the API;
-fitting is not yet invoked by the drawing UI.
+solver cases and numerical/diagnostic tests. See `docs/SOLVER.md` for the API.
+Run `npm test -- src/survey` for survey workflow tests.
 The JSON schema remains at version 1; unsupported versions are rejected.
 
 IBM Plex Mono regular and semibold Latin webfonts are bundled under `public/fonts`

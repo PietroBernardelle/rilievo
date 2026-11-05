@@ -58,9 +58,19 @@ transient output; the JSON schema and sketch UI are unchanged.
 
 ## M3: survey mode
 
-- Rule-based measurement queue per room.
-- Animated arrow and prompt, value entry in the command line, fit after each entry, residual colours.
-- Skip / blocked (choose a point on an edge instead) / redo / custom measurement (`M`).
+- [x] Rule-based measurement queue per room.
+- [x] Animated arrow and prompt, value entry in the command line, fit after each entry, residual colours.
+- [x] Skip / blocked (choose a point on an edge instead) / redo / custom measurement (`M`).
+- [x] Room rigidity/consistency status and ordered re-measure suggestions.
+- [x] Editable placement uncertainty for new and re-measured readings.
+
+M3 queues walls clockwise from corner A, then both quadrilateral diagonals or
+independent reachable diagonals plus a check for other polygons. Queue clicks and
+up/down controls change the order. Readings, fits, skips, alternatives, settings,
+and queue changes are undoable. Redo in the command line re-measures; old values
+remain as rejected history. Blocked endpoints and custom measurements use schema-1
+point references. Survey progress survives JSON save/open and autosave reload;
+press S to resume. Opening/height/join workflow steps remain in M4.
 
 ## M4: openings, heights, joins
 

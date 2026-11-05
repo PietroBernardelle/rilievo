@@ -71,6 +71,14 @@ A measurement end (`a` or `b`) can be:
 - `sketch` keeps the original drawn position. The fit writes `x`/`y`, so the sketch can always be restored.
 - Rooms never share vertices. Rooms are tied together through `joins`. This keeps each room's fit independent and the joins explicit.
 - Never delete measurements. Mark wrong ones `rejected`, so the history is kept.
+- M3 re-measurement creates a new `done` record and marks the old reading
+  `rejected`. Skipped requests stay `skipped` until revisited. Queue order follows
+  the measurement array, excluding rejected records and deferred height records.
+- `settings.placementSigma` is positive and editable. New and re-measured readings
+  capture `sqrt(laserSigma² + placementSigma²)` in their own `sigma`; changing the
+  setting does not rewrite historical measurement uncertainties.
+- The active survey cursor and undo stack are transient editor state. Queued
+  requests, skipped requests, values and settings persist in schema 1 unchanged.
 
 ## Polygon convention and coordinate precision
 
