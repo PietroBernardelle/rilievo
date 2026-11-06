@@ -104,6 +104,17 @@ to resume pending work. The queue continues with openings, heights and joins.
    Expand **Wall thickness per edge** to edit exterior thickness. **Delete** on
    either paired door removes both and their join; **Ctrl+Z** restores them.
 
+## Backups and recovery
+
+Use **File > Download backup (JSON)** for a dated copy outside the browser.
+The app retains five rolling autosaves; **File > Restore autosave 1–5** opens an
+earlier state, and **Ctrl+Z** undoes that restore. On reload, a missing, damaged or
+older autosave recovers from the newest usable local backup and shows a warning.
+The latest requested JSON download is also retained locally for that comparison.
+Downloaded files remain ordinary schema-2 project JSON and open with **File > Open**.
+The app cannot scan your Downloads folder; keep the downloaded file in case browser
+storage is cleared.
+
 ## Source layout
 
 - `src/model`: pure project types, editing, geometry, JSON validation, and undo history.

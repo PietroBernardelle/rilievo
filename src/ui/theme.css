@@ -686,3 +686,18 @@ input:focus-visible {
     animation: none;
   }
 }
+
+.storage-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid #808000;
+  background: #ffffc0;
+}
+.storage-warning span {
+  flex: 1;
+}
+.storage-warning button {
+  flex-shrink: 0;
+}

@@ -10,7 +10,6 @@ export interface Cursor {
   snap: string | null;
 }
 export const DEFAULT_ROOM_HEIGHT = 2.7;
-export const AUTOSAVE_KEY = 'rilievo.project.v1';
 export const UPCOMING_TOOLS: Record<string, string> = {
   C: 'Circle',
   L: 'Line',

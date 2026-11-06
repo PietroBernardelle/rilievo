@@ -40,32 +40,25 @@ import { MenuBar } from './MenuBar';
 import { ProjectPanel } from './ProjectPanel';
 import { StatusBar } from './StatusBar';
 import { ToolPalette } from './ToolPalette';
-import {
-  AUTOSAVE_KEY,
-  DEFAULT_ROOM_HEIGHT,
-  isTextInput,
-  UPCOMING_TOOLS,
-} from './editor';
+import { DEFAULT_ROOM_HEIGHT, isTextInput, UPCOMING_TOOLS } from './editor';
 import type { Cursor, Selection, Tool } from './editor';
+import { rememberDownload, restoreAutosave, writeAutosave } from './autosave';
+import type { Recovery, Snapshot } from './autosave';
 
-function _initialProject(): { project: Project; message: string } {
+function _initialProject(): Recovery & { project: Project } {
+  const empty = createProject(new Date().toISOString());
+  if (typeof window === 'undefined')
+    return { project: empty, warning: '', snapshots: [] };
   try {
-    const json =
-      typeof window === 'undefined'
-        ? null
-        : window.localStorage.getItem(AUTOSAVE_KEY);
-    if (json)
-      return {
-        project: loadProject(json),
-        message: 'Restored autosaved project.',
-      };
+    const recovery = restoreAutosave(window.localStorage);
+    return { ...recovery, project: recovery.project ?? empty };
   } catch (error) {
     return {
-      project: createProject(new Date().toISOString()),
-      message: `Autosave could not be restored: ${error instanceof Error ? error.message : 'Storage unavailable.'} Use Open to recover a file.`,
+      project: empty,
+      snapshots: [],
+      warning: `Autosave could not be restored: ${error instanceof Error ? error.message : 'Storage unavailable.'} Use File > Open to recover a JSON backup.`,
     };
   }
-  return { project: createProject(new Date().toISOString()), message: '' };
 }
 const PROMPTS: Record<Tool, string> = {
   V: 'Select a room or corner. Drag a corner to move. Delete removes the selection.',
@@ -124,17 +117,19 @@ export function App() {
   );
   const [tool, setTool] = useState<Tool>('V');
   const [cursor, setCursor] = useState<Cursor | null>(null);
-  const [message, setMessage] = useState(initial.message);
+  const [message, setMessage] = useState('');
+  const [storageWarning, setStorageWarning] = useState(initial.warning);
+  const [snapshots, setSnapshots] = useState(initial.snapshots);
   const [resetToken, setResetToken] = useState(0);
   const [fitToken, setFitToken] = useState(project.blocks.length ? 1 : 0);
   const inputRef = useRef<HTMLInputElement>(null);
   const openRequest = useRef(0);
   function persist(next: Project): void {
     try {
-      window.localStorage.setItem(AUTOSAVE_KEY, saveProject(next));
+      setSnapshots(writeAutosave(window.localStorage, next));
     } catch (error) {
-      setMessage(
-        `Autosave failed: ${error instanceof Error ? error.message : 'Storage unavailable.'} Use File > Save.`,
+      setStorageWarning(
+        `Autosave failed: ${error instanceof Error ? error.message : 'Storage unavailable.'} Use File > Download backup.`,
       );
     }
   }
@@ -251,22 +246,44 @@ export function App() {
     });
     setFitToken((value) => value + 1);
   }
-  function saveFile(): void {
+  function saveFile(backup = false): void {
     if (document.activeElement instanceof HTMLElement)
       document.activeElement.blur();
     attempt(() => {
-      const blob = new Blob([saveProject(historyRef.current.present.project)], {
+      const current = historyRef.current.present.project;
+      const blob = new Blob([saveProject(current)], {
         type: 'application/json',
       });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = `${project.name.replace(/[^\p{L}\p{N} _-]/gu, '_') || 'rilievo'}.json`;
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      anchor.download = `${current.name.replace(/[^\p{L}\p{N} _-]/gu, '_') || 'rilievo'}${backup ? `-backup-${stamp}` : ''}.json`;
       document.body.append(anchor);
       anchor.click();
       anchor.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setMessage('Project saved as JSON.');
+      setMessage(
+        backup ? 'JSON backup download requested.' : 'Project saved as JSON.',
+      );
+      try {
+        rememberDownload(window.localStorage, current);
+      } catch {
+        setStorageWarning(
+          'JSON download requested, but the local backup copy could not be stored. Keep the downloaded file for recovery.',
+        );
+      }
+    });
+  }
+  function restoreSnapshot(snapshot: Snapshot): void {
+    attempt(() => {
+      const next = loadProject(snapshot.json);
+      cancel();
+      setSelection(null);
+      setActiveId(next.blocks[0]?.id ?? null);
+      applyState({ project: next, survey: null });
+      setFitToken((value) => value + 1);
+      setMessage('Restored autosave. Ctrl+Z undoes the restore.');
     });
   }
   async function openFile(file: File): Promise<void> {
@@ -468,23 +485,39 @@ export function App() {
   }
   return (
     <div className="app-shell">
-      <MenuBar
-        projectName={project.name}
-        canUndo={history.past.length > 0}
-        canRedo={history.future.length > 0}
-        canDelete={!!selectedRoom && !surveying}
-        surveying={surveying}
-        onSurvey={toggleSurvey}
-        onCustom={beginCustom}
-        onSettings={() => setSettingsOpen((value) => !value)}
-        onNew={newFile}
-        onOpen={() => inputRef.current?.click()}
-        onSave={saveFile}
-        onUndo={() => travel('undo')}
-        onRedo={() => travel('redo')}
-        onDelete={remove}
-        onFit={() => setFitToken((value) => value + 1)}
-      />
+      <div>
+        <MenuBar
+          projectName={project.name}
+          canUndo={history.past.length > 0}
+          canRedo={history.future.length > 0}
+          canDelete={!!selectedRoom && !surveying}
+          surveying={surveying}
+          onSurvey={toggleSurvey}
+          onCustom={beginCustom}
+          onSettings={() => setSettingsOpen((value) => !value)}
+          onNew={newFile}
+          onOpen={() => inputRef.current?.click()}
+          onSave={() => saveFile()}
+          onBackup={() => saveFile(true)}
+          snapshots={snapshots}
+          onRestore={restoreSnapshot}
+          onUndo={() => travel('undo')}
+          onRedo={() => travel('redo')}
+          onDelete={remove}
+          onFit={() => setFitToken((value) => value + 1)}
+        />
+        {storageWarning && (
+          <div className="storage-warning" role="alert">
+            <span>{storageWarning}</span>
+            <button type="button" onClick={() => saveFile(true)}>
+              Download backup
+            </button>
+            <button type="button" onClick={() => setStorageWarning('')}>
+              Dismiss
+            </button>
+          </div>
+        )}
+      </div>
       <input
         className="visually-hidden"
         ref={inputRef}

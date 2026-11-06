@@ -149,3 +149,23 @@ marks those pre-existing joins measured to preserve their fit. Ambiguous legacy
 pairing produces a clear load error. The supplied `examples/sample-project.json`
 remains version 1 as a migration fixture. Saves and autosaves use version 2;
 unsupported future versions are rejected. No user file is rewritten until saved.
+
+## Browser recovery copies (M4.1)
+
+Project files remain schema 2. Recovery timestamps are browser storage metadata,
+not fields in the project JSON. The original primary autosave key is retained;
+a separate journal holds the five latest consecutive distinct project states,
+newest first. Identical saves refresh the timestamp without evicting a different
+state. Undo, redo, New, Open and restoring a snapshot also autosave normally.
+The journal is written before the primary so an interrupted primary write leaves
+a recovery copy. Existing pre-upgrade autosaves are retained on the first edit.
+
+File > Download backup writes a dated, ordinary project JSON file. Save JSON and
+Download backup also retain one separate local copy of the latest requested
+download, with its time. On startup, missing, unreadable or stale primary saves
+recover from the newest valid retained copy and show a persistent warning. Loading
+does not overwrite any copies; File lists the five autosaves for an undoable restore.
+Invalid snapshots are ignored. When no local copy survives, use Open with a downloaded
+file. The browser cannot inspect external backup files or confirm a download completed;
+the comparison uses retained local copies, not the Downloads folder. Clearing browser
+storage removes those local copies, so downloaded JSON remains the independent backup.

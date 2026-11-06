@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { Snapshot } from './autosave';
 interface Props {
   projectName: string;
   canUndo: boolean;
@@ -7,6 +8,9 @@ interface Props {
   onNew: () => void;
   onOpen: () => void;
   onSave: () => void;
+  onBackup: () => void;
+  snapshots: Snapshot[];
+  onRestore: (snapshot: Snapshot) => void;
   onUndo: () => void;
   onRedo: () => void;
   onDelete: () => void;
@@ -26,6 +30,11 @@ export function MenuBar(props: Props) {
         { label: 'New', run: props.onNew },
         { label: 'Open…', run: props.onOpen },
         { label: 'Save JSON', run: props.onSave },
+        { label: 'Download backup (JSON)', run: props.onBackup },
+        ...props.snapshots.map((snapshot, i) => ({
+          label: `Restore autosave ${i + 1} · ${new Date(snapshot.savedAt).toLocaleString()}`,
+          run: () => props.onRestore(snapshot),
+        })),
       ],
     },
     {
