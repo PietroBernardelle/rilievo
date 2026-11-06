@@ -2,7 +2,7 @@ import type { Block } from '../model/types';
 import { edgeEndpoints, resolvePoint } from '../model/points';
 import { distance } from '../model/geometry';
 import { openingJoin } from '../model/openings';
-import { wallShapes, drawnWallThickness } from '../tools/walls';
+import { wallDrawing, doorSwing, drawnWallThickness } from '../tools/walls';
 import { toScreen } from '../tools/viewport';
 import type { Viewport } from '../tools/viewport';
 import type { Selection } from './editor';
@@ -16,28 +16,39 @@ export function PlanWalls({
   view: Viewport;
   selection: Selection | null;
 }) {
+  const rooms = wallDrawing(block);
+  const points = (shape: { x: number; y: number }[]): string =>
+    shape
+      .map((point) => {
+        const p = toScreen(point, view);
+        return `${p.x},${p.y}`;
+      })
+      .join(' ');
   return (
     <g className="plan-walls">
-      {block.rooms.map((room) => (
-        <g
-          key={room.id}
-          className={`wall-room${selection?.roomId === room.id ? ' selected' : ''}`}
-        >
-          {wallShapes(block, room).map((shape, i) => {
-            const points = shape.map((point) => {
-              const p = toScreen(point, view);
-              return `${p.x},${p.y}`;
-            });
-            return (
-              <g key={i}>
-                <polygon points={points.join(' ')} />
-                <polyline points={points.slice(0, 2).join(' ')} />
-                <polyline points={points.slice(2).join(' ')} />
-              </g>
-            );
-          })}
+      {rooms.map((room) => (
+        <g key={room.roomId} className="wall-room">
+          {room.shapes.map((shape, i) => (
+            <polygon key={i} points={points(shape)} />
+          ))}
         </g>
       ))}
+      {[...rooms]
+        .sort(
+          (a, b) =>
+            Number(a.roomId === selection?.roomId) -
+            Number(b.roomId === selection?.roomId),
+        )
+        .map((room) => (
+          <g
+            key={room.roomId}
+            className={`wall-room${selection?.roomId === room.roomId ? ' selected' : ''}`}
+          >
+            {room.lines.map((line, i) => (
+              <polyline key={i} points={points(line)} />
+            ))}
+          </g>
+        ))}
     </g>
   );
 }
@@ -65,17 +76,11 @@ export function PlanOpenings({
           const end = resolvePoint(block, { jamb: opening.id, side: 1 });
           const s = toScreen(start, view);
           const e = toScreen(end, view);
-          const hinge = opening.hinge === 1 ? end : start;
-          const closed = opening.hinge === 1 ? start : end;
-          const direction = opening.swing === 'out' ? -1 : 1;
-          const leaf = {
-            x: hinge.x - u.y * opening.width * direction,
-            y: hinge.y + u.x * opening.width * direction,
-          };
+          const { hinge, closed, leaf, width } = doorSwing(block, opening);
           const h = toScreen(hinge, view);
           const c = toScreen(closed, view);
           const l = toScreen(leaf, view);
-          const radius = opening.width * view.scale;
+          const radius = width * view.scale;
           const sweep =
             (closed.x - hinge.x) * (leaf.y - hinge.y) -
               (closed.y - hinge.y) * (leaf.x - hinge.x) <

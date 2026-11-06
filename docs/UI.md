@@ -51,3 +51,17 @@ parallel lines, and arches are clear gaps. Shared doors show one physical swing.
 Selected openings have two square resize handles. Scalar survey prompts show a
 magenta vertical arrow and a height/sill/thickness label. Room details include
 height readings, a red sloping-ceiling warning, openings and per-edge thickness.
+
+## M4.1 recovery and plan readability
+
+File > Download backup (JSON) uses a dated filename. File also lists the five
+retained autosaves, newest first; restoring one is undoable. Recovery and storage
+failures appear in a persistent warning above the workspace, with Download backup
+and Dismiss controls. A first visit also reports that no autosave exists.
+
+Dimensions are laid out together across all rooms and the drawing preview.
+Collisions move along their own edge while keeping the outward offset; labels
+without enough screen space are hidden. Wall fill is drawn before face lines;
+line portions inside the combined poche, including internal seams, are omitted.
+A shared door swinging into the neighbouring room starts at that room's jambs.
+Unpaired outward doors use the exterior jamb face; inward doors use the room face.

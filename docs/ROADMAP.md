@@ -102,6 +102,13 @@ Tests exercise case 6 through the UI's survey transactions, window fitting,
 sloping ceilings and paired deletion. Browser checks cover placement, drag/resize,
 properties, measurement prompts, undo/redo and reload.
 
+## M4.1: recovery and plan cleanup
+
+- [x] Keep five rolling autosaves and expose undoable restores in the File menu.
+- [x] Download dated JSON backups; warn and recover when the primary autosave is missing, corrupt or older than a retained backup.
+- [x] Avoid shared-wall dimension collisions, anchor swings on the opening room's jambs, and hide face lines inside wall poche.
+- [x] Add recovery and rendering regressions; verify download, restore/undo and reload in the browser.
+
 ## M5: export
 
 - SVG (true metres, viewBox), PDF (jsPDF + svg2pdf.js; A4/A3; 1:50/1:100; title block; dimension lines; room names and areas), DXF R12 (layers WALLS, ROOMS, OPENINGS, DIMS, TEXT, FEATURES), PNG.

@@ -1,4 +1,5 @@
-import { edgeLabels } from '../tools/labels';
+import { layoutEdgeLabels } from '../tools/labels';
+import type { EdgeLabel } from '../tools/labels';
 import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { containsPoint, distance, roomPoints } from '../model/geometry';
@@ -73,18 +74,10 @@ type Gesture =
       raw: Point;
       changes: { offset: number; width: number };
     };
-function EdgeLabels({
-  points,
-  closed = true,
-  view,
-}: {
-  points: Point[];
-  closed?: boolean;
-  view: Viewport;
-}) {
+function EdgeLabels({ labels }: { labels: EdgeLabel[] }) {
   return (
     <g className="edge-labels" pointerEvents="none">
-      {edgeLabels(points, view, closed).map((label, i) => (
+      {labels.map((label, i) => (
         <text
           key={i}
           x={label.point.x}
@@ -547,6 +540,15 @@ export function DrawingCanvas(props: Props) {
             ),
           }
         : block);
+  const labelGroups = layoutEdgeLabels(
+    [
+      ...(previewBlock?.rooms.map((room) => ({
+        points: roomPoints(previewBlock, room, false),
+      })) ?? []),
+      { points: preview, closed: tool === 'R' },
+    ],
+    view,
+  );
   return (
     <svg
       ref={svgRef}
@@ -575,7 +577,7 @@ export function DrawingCanvas(props: Props) {
       {previewBlock && (
         <PlanWalls block={previewBlock} view={view} selection={selection} />
       )}
-      {block?.rooms.map((room) => {
+      {block?.rooms.map((room, roomIndex) => {
         const points = roomPoints(block, room, false).map((point, i) =>
           gesture?.type === 'corner' && room.vertexIds[i] === gesture.vertexId
             ? gesture.point
@@ -623,7 +625,7 @@ export function DrawingCanvas(props: Props) {
                 height="6"
               />
             ))}
-            <EdgeLabels points={points} view={view} />
+            <EdgeLabels labels={labelGroups[roomIndex] ?? []} />
           </g>
         );
       })}
@@ -659,7 +661,7 @@ export function DrawingCanvas(props: Props) {
               })
               .join(' ')}
           />
-          <EdgeLabels points={preview} closed={tool === 'R'} view={view} />
+          <EdgeLabels labels={labelGroups.at(-1) ?? []} />
           {draft[0] && (
             <rect
               x={toScreen(draft[0], view).x - 4}
